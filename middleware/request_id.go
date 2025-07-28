@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"context"
-
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
@@ -29,7 +27,8 @@ func RequestIDMiddleware(logger interfaces.Logger) echo.MiddlewareFunc {
 			req.Header.Set("X-Request-ID", requestID)
 			res.Header().Set("X-Request-ID", requestID)
 
-			ctx := context.WithValue(req.Context(), requestctx.RequestIDContextKey, requestID)
+			ctx := requestctx.SetRequestID(req.Context(), requestID)
+
 			c.SetRequest(req.WithContext(ctx))
 
 			res.Header().Set("X-Request-ID", requestID)
