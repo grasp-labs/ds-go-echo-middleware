@@ -47,7 +47,6 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer i
 			}
 
 			// Parse (or generate) request ID set byt RequestID middleware
-
 			requestIDStr := requestctx.GetRequestID(c.Request().Context())
 			requestID, err := uuid.Parse(requestIDStr)
 			if err != nil {

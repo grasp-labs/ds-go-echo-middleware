@@ -1,0 +1,24 @@
+# .goreleaser.yml
+
+version: 1
+
+# Only create a GitHub release and tag; no binaries
+release:
+  github:
+    owner: grasp-labs
+    name: ds-go-echo-middleware
+  draft: false
+  prerelease: false
+
+builds: [] # no binaries, just a module
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+# Skip artifacts, but still generate release with tags and changelog
+archives: []
