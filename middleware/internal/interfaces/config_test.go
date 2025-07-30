@@ -3,6 +3,7 @@ package interfaces_test
 import (
 	"testing"
 
+	"github.com/allegro/bigcache/v3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
@@ -11,10 +12,13 @@ import (
 
 // Domonstration of how a Config should be defined
 // and a test that
+
 type mockConfig struct {
 	name          string
 	productID     uuid.UUID
 	memoryLimitMB int16
+	apiCache      *bigcache.BigCache
+	permission    *interfaces.Permission
 }
 
 // Implement the interface methods
@@ -28,6 +32,14 @@ func (c *mockConfig) Name() string {
 
 func (c *mockConfig) MemoryLimitMB() int16 {
 	return c.memoryLimitMB
+}
+
+func (c *mockConfig) APICache() *bigcache.BigCache {
+	return c.apiCache
+}
+
+func (c *mockConfig) Permission() *interfaces.Permission {
+	return c.permission
 }
 
 func mockCallable(config interfaces.Config) (string, uuid.UUID, int16) {

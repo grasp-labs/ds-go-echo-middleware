@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/allegro/bigcache/v3"
 	"github.com/google/uuid"
+
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 )
 
 type mockLogger struct {
@@ -34,11 +37,15 @@ type mockConfig struct {
 	name          string
 	productID     uuid.UUID
 	memoryLimitMB int16
+	apiCache      *bigcache.BigCache
+	permission    *interfaces.Permission
 }
 
-func (c *mockConfig) Name() string         { return c.name }
-func (c *mockConfig) ProductID() uuid.UUID { return c.productID }
-func (c *mockConfig) MemoryLimitMB() int16 { return c.memoryLimitMB }
+func (c *mockConfig) Name() string                       { return c.name }
+func (c *mockConfig) ProductID() uuid.UUID               { return c.productID }
+func (c *mockConfig) MemoryLimitMB() int16               { return c.memoryLimitMB }
+func (c *mockConfig) Permission() *interfaces.Permission { return c.permission }
+func (c *mockConfig) APICache() *bigcache.BigCache       { return c.apiCache }
 
 // --- Mock Producer ---
 type mockProducer struct {
