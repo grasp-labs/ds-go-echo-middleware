@@ -38,14 +38,14 @@ type mockConfig struct {
 	productID     uuid.UUID
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
-	permission    *interfaces.Permission
+	permission    interfaces.PermissionConfig
 }
 
-func (c *mockConfig) Name() string                       { return c.name }
-func (c *mockConfig) ProductID() uuid.UUID               { return c.productID }
-func (c *mockConfig) MemoryLimitMB() int16               { return c.memoryLimitMB }
-func (c *mockConfig) Permission() *interfaces.Permission { return c.permission }
-func (c *mockConfig) APICache() *bigcache.BigCache       { return c.apiCache }
+func (c *mockConfig) Name() string                            { return c.name }
+func (c *mockConfig) ProductID() uuid.UUID                    { return c.productID }
+func (c *mockConfig) MemoryLimitMB() int16                    { return c.memoryLimitMB }
+func (c *mockConfig) Permission() interfaces.PermissionConfig { return c.permission }
+func (c *mockConfig) APICache() *bigcache.BigCache            { return c.apiCache }
 
 // --- Mock Producer ---
 type mockProducer struct {
