@@ -2,6 +2,10 @@
 
 Reusable middleware components for Go applications using Echo — including structured authentication, authorization, request auditing, and request ID propagation, with support for Kafka-based event logging and cache-based permission lookups.
 
+## Installation & Usage
+
+See [docs/middleware-guide.md](./docs/middleware-guide.md) for how to use Middleware.
+
 ## 🚀 Features
 
 ### 🧠 Request ID Middleware
@@ -34,35 +38,7 @@ Reusable middleware components for Go applications using Echo — including stru
 - Sends structured authentication/authorization events to a Kafka topic.
 - Fully decoupled via an interface-based producer abstraction.
 
-## Usage
-
-1. Wire into your Echo app:
-
-```go
-e := echo.New()
-
-// Set up logger, config, and Kafka producer
-logger := NewLogger()
-producer := NewKafkaProducer(...)
-cfg := NewAppConfig(...)
-
-e.Use(middleware.RequestIDMiddleware(logger))
-e.Use(middleware.AuditMiddleware(cfg, logger, producer))
-
-authMiddleware, _ := middleware.AuthenticationMiddleware(logger, publicKeyPEM, producer)
-e.Use(authMiddleware)
-
-e.Use(middleware.AuthorizationMiddleware(cfg, logger, producer))
-```
-
-2. Access user context in handlers:
-
-```go
-func handler(c echo.Context) error {
-    claims := c.Get("userContext").(*models.Context)
-    return c.String(http.StatusOK, "Hello "+claims.Sub)
-}
-```
+See [docs/kafka-integration.md](./docs/kafka-integration.md) for example of how to integrate with data streaming platform.
 
 ### ✅ Interfaces
 
@@ -73,49 +49,14 @@ Producer: Kafka producer interface
 Config: provides ProductID, Permission, APICache, etc.
 You can plug in your own implementations or mocks.
 
+See [docs/interface-example-config.md](./docs/interface-example-config.md) for example of satisfying the config interface.
+
 ## 📦 Dependencies
 
 - Echo – Web framework
 - BigCache – In-memory cache
 - Kafka Go – Kafka integration
 - golang-jwt – JWT parsing/validation
-
-## 📌 Versioning
-
-This project follows Semantic Versioning 2.0.0 to indicate release stability and compatibility:
-
-MAJOR.MINOR.PATCH
-MAJOR – breaking changes
-MINOR – new features, backward compatible
-PATCH – bug fixes, small improvements
-
-### 🏷️ Tagging a Release
-
-To cut a new release:
-
-```bash
-# 1. Commit all changes
-git commit -am "Prepare release v1.0.0"
-
-# 2. Create a version tag
-git tag v1.0.0
-
-# 3. Push the tag to origin
-git push origin v1.0.0
-```
-
-To dry run locally:
-
-```bash
-# Install if needed
-brew install goreleaser
-
-# Run dry-run release
-goreleaser release --snapshot --skip-publish --rm-dist
-
-# Local release - assumes GITHUB_TOKEN is defined as environment variable
-goreleaser release --clean --config .goreleaser.yml
-```
 
 ## Tests
 
