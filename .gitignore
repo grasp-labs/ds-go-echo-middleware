@@ -31,3 +31,5 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# Build output
+dist/
