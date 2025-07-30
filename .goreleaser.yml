@@ -10,7 +10,8 @@ release:
   draft: false
   prerelease: false
 
-builds: [] # no binaries, just a module
+builds: 
+  - skip: true # building a library, should not build.
 
 changelog:
   sort: asc
