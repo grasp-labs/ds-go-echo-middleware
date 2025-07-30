@@ -113,6 +113,8 @@ brew install goreleaser
 # Run dry-run release
 goreleaser release --snapshot --skip-publish --rm-dist
 
+# Local release - assumes GITHUB_TOKEN is defined as environment variable
+goreleaser release --clean --config .goreleaser.yml
 ```
 
 ## Tests
