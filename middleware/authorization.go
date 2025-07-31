@@ -24,11 +24,10 @@ type Entitlement struct {
 
 // AuthorizationMiddleware for asserting a user is permitted
 // to perform action.
-func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer interfaces.Producer) echo.MiddlewareFunc {
+func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer interfaces.Producer) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
-			permissionConfig := cfg.Permission()
 
 			// Get userContext from Echo context
 			userContext := c.Get("userContext")
@@ -56,14 +55,14 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, pr
 			entry, err := cfg.APICache().Get(userID)
 			if err == nil {
 				logger.Info(ctx, "Cache entry for user: %s", userID)
-				if userIsMember(ctx, logger, entry, permissionConfig.Roles()) {
+				if userIsMember(ctx, logger, entry, roles) {
 					logger.Info(ctx, "Entitlement accepts request for user: %s", userID)
 					return next(c)
 				}
 			}
 
 			// Make external entitlement API call
-			req, err := http.NewRequest("GET", permissionConfig.Url(), nil)
+			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
 				return errorHandler(c, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims.Sub)
 			}
@@ -88,7 +87,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, pr
 			// Cache result
 			cfg.APICache().Set(userID, body)
 
-			if !userIsMember(ctx, logger, body, permissionConfig.Roles()) {
+			if !userIsMember(ctx, logger, body, roles) {
 				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims.Sub)
 			}
 
