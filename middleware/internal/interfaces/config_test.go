@@ -15,7 +15,6 @@ type mockConfig struct {
 	productID     uuid.UUID
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
-	permission    interfaces.PermissionConfig
 }
 
 // Implement the interface methods
@@ -33,10 +32,6 @@ func (c *mockConfig) MemoryLimitMB() int16 {
 
 func (c *mockConfig) APICache() *bigcache.BigCache {
 	return c.apiCache
-}
-
-func (c *mockConfig) Permission() interfaces.PermissionConfig {
-	return c.permission
 }
 
 func mockCallable(config interfaces.Config) (string, uuid.UUID, int16) {
