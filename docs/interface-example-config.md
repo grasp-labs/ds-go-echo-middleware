@@ -1,11 +1,12 @@
 # 🧩 Example: Config Struct Implementation
 
-Below you will find a full example of implementing a Config struct that satisfies
-a simplified Config interface.
+This document demonstrates how to implement a `Config` struct that satisfies a simplified `Config` interface, typically required by middleware or shared libraries.
+
+---
 
 ## ✅ Interface Recap
 
-The interface you're satisfying looks like:
+The following is the interface you need to satisfy:
 
 ```go
 type Config interface {
@@ -14,6 +15,12 @@ type Config interface {
 	ProductID() uuid.UUID
 	APICache() *bigcache.BigCache
 }
+```
+
+Since authorization middleware also require configuration, you may choose to add:
+
+```go
+	Permission() PermissionConfig
 ```
 
 ## 📦 config.go (Example Implementation)
@@ -26,14 +33,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// PermissionConfig defines access groups and entitlement service endpoint.
 type PermissionConfig struct {
 	roles []string
-	url string
+	url   string
 }
 
+// Roles returns the allowed access groups.
 func (p *PermissionConfig) Roles() []string { return p.roles }
+
+// Url returns the entitlement service URL.
 func (p *PermissionConfig) Url() string { return p.url }
 
+// AppConfig implements the Config interface and holds service configuration.
 type AppConfig struct {
 	name          string
 	productID     uuid.UUID
@@ -42,7 +54,7 @@ type AppConfig struct {
 	permission    PermissionConfig
 }
 
-// Constructor
+// NewAppConfig constructs a new AppConfig instance with required fields.
 func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm PermissionConfig) *AppConfig {
 	return &AppConfig{
 		name:          name,
@@ -53,7 +65,8 @@ func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache
 	}
 }
 
-// Interface methods
+// Interface method implementations:
+
 func (c *AppConfig) Name() string {
 	return c.name
 }
@@ -71,7 +84,7 @@ func (c *AppConfig) APICache() *bigcache.BigCache {
 }
 
 func (c *AppConfig) Permission() PermissionConfig {
-	return &c.permission
+	return c.permission
 }
 ```
 
@@ -91,20 +104,20 @@ import (
 )
 
 func main() {
-	cache, _ := bigcache.NewBigCache(bigcache.DefaultConfig(24 * time.Hour))
+	cache, _ := bigcache.New(context.Background(), bigcache.DefaultConfig(10 * time.Minute))
 
 	cfg := config.NewAppConfig(
 		"your-service",
 		uuid.MustParse("11111111-1111-1111-1111-111111111111"),
 		1024,
 		cache,
-		PermissionConfig{
-			Roles: []string{"admin", "user"},
-			URL:   "https://entitlement-api.example.com/v1/user/roles",
+		config.PermissionConfig{
+			roles: []string{"admin", "user"},
+			url:   "https://entitlement-api.example.com/v1/user/roles",
 		},
 	)
 
-	// Now pass cfg into middleware, e.g.:
+	// Pass cfg into middleware setup
 	// e.Use(middleware.AuthorizationMiddleware(cfg, logger, producer))
 }
 ```
