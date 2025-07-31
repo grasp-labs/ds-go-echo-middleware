@@ -71,7 +71,7 @@ func (c *AppConfig) APICache() *bigcache.BigCache {
 }
 
 func (c *AppConfig) Permission() PermissionConfig {
-	return c.permission
+	return &c.permission
 }
 ```
 
