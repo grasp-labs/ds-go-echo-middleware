@@ -38,7 +38,7 @@ type AppConfig struct {
 }
 
 // Constructor
-func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm *interfaces.PermissionConfig) *AppConfig {
+func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm interfaces.PermissionConfig) *AppConfig {
 	return &AppConfig{
 		name:          name,
 		productID:     productID,
