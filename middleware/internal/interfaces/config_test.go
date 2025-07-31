@@ -10,15 +10,12 @@ import (
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 )
 
-// Domonstration of how a Config should be defined
-// and a test that
-
 type mockConfig struct {
 	name          string
 	productID     uuid.UUID
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
-	permission    *interfaces.Permission
+	permission    interfaces.PermissionConfig
 }
 
 // Implement the interface methods
@@ -38,7 +35,7 @@ func (c *mockConfig) APICache() *bigcache.BigCache {
 	return c.apiCache
 }
 
-func (c *mockConfig) Permission() *interfaces.Permission {
+func (c *mockConfig) Permission() interfaces.PermissionConfig {
 	return c.permission
 }
 

@@ -1,7 +1,7 @@
 # 🧩 Example: Config Struct Implementation
 
 Below you will find a full example of implementing a Config struct that satisfies
-the Config interface.
+a simplified Config interface.
 
 ## ✅ Interface Recap
 
@@ -13,7 +13,7 @@ type Config interface {
 	Name() string
 	ProductID() uuid.UUID
 	APICache() *bigcache.BigCache
-	Permission() *Permission
+	Permission() PermissionConfig
 }
 ```
 
@@ -34,11 +34,11 @@ type AppConfig struct {
 	productID     uuid.UUID
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
-	permission    *interfaces.Permission
+	permission    interfaces.PermissionConfig
 }
 
 // Constructor
-func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm *interfaces.Permission) *AppConfig {
+func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm interfaces.PermissionConfig) *AppConfig {
 	return &AppConfig{
 		name:          name,
 		productID:     productID,
