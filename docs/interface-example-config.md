@@ -13,7 +13,6 @@ type Config interface {
 	Name() string
 	ProductID() uuid.UUID
 	APICache() *bigcache.BigCache
-	Permission() PermissionConfig
 }
 ```
 
@@ -25,20 +24,26 @@ package config
 import (
 	"github.com/allegro/bigcache/v3"
 	"github.com/google/uuid"
-
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 )
+
+type PermissionConfig struct {
+	roles []string
+	url string
+}
+
+func (p *PermissionConfig) Roles() []string { return p.roles }
+func (p *PermissionConfig) Url() string { return p.url }
 
 type AppConfig struct {
 	name          string
 	productID     uuid.UUID
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
-	permission    interfaces.PermissionConfig
+	permission    PermissionConfig
 }
 
 // Constructor
-func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm interfaces.PermissionConfig) *AppConfig {
+func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm PermissionConfig) *AppConfig {
 	return &AppConfig{
 		name:          name,
 		productID:     productID,
@@ -65,7 +70,7 @@ func (c *AppConfig) APICache() *bigcache.BigCache {
 	return c.apiCache
 }
 
-func (c *AppConfig) Permission() *interfaces.Permission {
+func (c *AppConfig) Permission() *PermissionConfig {
 	return c.permission
 }
 ```
@@ -82,7 +87,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 	"yourapp/config"
 )
 
@@ -94,7 +98,7 @@ func main() {
 		uuid.MustParse("11111111-1111-1111-1111-111111111111"),
 		1024,
 		cache,
-		&interfaces.Permission{
+		PermissionConfig{
 			Roles: []string{"admin", "user"},
 			URL:   "https://entitlement-api.example.com/v1/user/roles",
 		},
