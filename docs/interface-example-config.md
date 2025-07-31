@@ -70,7 +70,7 @@ func (c *AppConfig) APICache() *bigcache.BigCache {
 	return c.apiCache
 }
 
-func (c *AppConfig) Permission() *PermissionConfig {
+func (c *AppConfig) Permission() PermissionConfig {
 	return c.permission
 }
 ```
