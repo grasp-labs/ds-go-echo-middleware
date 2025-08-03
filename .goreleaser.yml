@@ -1,7 +1,5 @@
 # .goreleaser.yml
 
-version: 2
-
 # Only create a GitHub release and tag; no binaries
 release:
   github:
