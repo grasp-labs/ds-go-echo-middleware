@@ -11,9 +11,10 @@ jobs:
 
     env:
       AWS_REGION: eu-north-1
-      DOMAIN: ds         
-      SERVICE_GROUP: packages  
-      SERVICE_NAME: go-echo-middleware  
+      DOMAIN: ds
+      SERVICE_GROUP: packages
+      SERVICE_NAME: go-echo-middleware
+      ACCOUNT_ID: 999125116186
 
     steps:
       - name: Checkout code
@@ -52,7 +53,7 @@ jobs:
               "serviceName": {"S": "${{ env.SERVICE_NAME }}"},
               "version": {"S": "${{ steps.meta.outputs.VERSION }}"},
               "commit": {"S": "${{ steps.meta.outputs.COMMIT_SHA }}"},
-              "artifact": {"S": "ghcr.io/org/${{ env.SERVICE_NAME }}:${{ steps.meta.outputs.VERSION }}"},
+              "artifact": {"S": "${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.SERVICE_NAME }}:${{ steps.meta.outputs.VERSION }}"},
               "timestamp": {"S": "${{ steps.meta.outputs.TIMESTAMP }}"}
             }' \
             --region $AWS_REGION
