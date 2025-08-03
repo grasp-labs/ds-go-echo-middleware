@@ -1,5 +1,11 @@
 # ds-go-echo-middleware
 
+![Build](https://github.com/grasp-labs/ds-go-echo-middleware/actions/workflows/ci.yml/badge.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/grasp-labs/ds-go-echo-middleware)](https://goreportcard.com/report/github.com/grasp-labs/ds-go-echo-middleware)
+[![codecov](https://codecov.io/gh/grasp-labs/ds-go-echo-middleware/branch/main/graph/badge.svg)](https://codecov.io/gh/grasp-labs/ds-go-echo-middleware)
+[![GitHub release](https://img.shields.io/github/v/release/grasp-labs/ds-go-echo-middleware)](https://github.com/grasp-labs/ds-go-echo-middleware/releases)
+![License](https://img.shields.io/github/license/grasp-labs/ds-go-echo-middleware)
+
 Reusable middleware components for Go applications using Echo — including structured authentication, authorization, request auditing, and request ID propagation, with support for Kafka-based event logging and cache-based permission lookups.
 
 ## Installation & Usage
