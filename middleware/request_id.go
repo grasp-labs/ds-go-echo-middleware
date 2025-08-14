@@ -5,7 +5,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
 // RequestIDMiddleware sets X-Request-ID if missing, and propagates it

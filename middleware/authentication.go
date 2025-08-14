@@ -16,7 +16,7 @@ import (
 
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
 // ParseRSAPublicKey parses a PEM-encoded RSA public key and handles PKCS8 or PKCS1 formats

@@ -8,7 +8,7 @@ import (
 
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
 // UsageMiddleware returns an Echo middleware that emits usage report to Kafka.
