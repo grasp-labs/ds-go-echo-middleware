@@ -14,7 +14,7 @@ import (
 
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
 // AuditMiddleware returns an Echo middleware that emits audit logs to Kafka.

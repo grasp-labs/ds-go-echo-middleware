@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
 func TestRequestIDMiddleware_GeneratesID(t *testing.T) {
