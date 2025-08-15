@@ -1,4 +1,3 @@
-// middleware/requestctx/user.go
 package requestctx
 
 import (
@@ -7,7 +6,7 @@ import (
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/claims"
 )
 
-var userContextKey ctxKey
+var userContextKey ctxKey = "userContext"
 
 func GetUserContext(ctx context.Context) *claims.Context {
 	if ctx == nil {
@@ -18,8 +17,8 @@ func GetUserContext(ctx context.Context) *claims.Context {
 	if ok && uc != nil {
 		return uc
 	}
-	// (optional legacy fallback)
-	if v := ctx.Value("userContext"); v != nil {
+
+	if v := ctx.Value(userContextKey); v != nil {
 		if uc, ok := v.(*claims.Context); ok && uc != nil {
 			return uc
 		}
