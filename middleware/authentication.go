@@ -86,6 +86,8 @@ func AuthenticationMiddleware(
 		},
 
 		Validator: func(raw string, c echo.Context) (bool, error) {
+			// Store raw authorization header in the Echo context
+			c.Set("Authorization", "Bearer "+raw)
 			token := trimBearer(raw)
 
 			if token == "" {
