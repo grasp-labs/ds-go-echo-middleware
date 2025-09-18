@@ -64,7 +64,7 @@ func AuthenticationMiddleware(
 		// - For Authorization header with optional "Bearer " prefix:
 		KeyLookup: "header:Authorization",
 		// - If you prefer X-Api-Key, change to: KeyLookup: "header:X-Api-Key"
-
+		//   and set AuthScheme to "" (empty string) if the X-Api-Key header contains only the token.
 		AuthScheme: "Bearer",
 
 		Skipper: func(c echo.Context) bool {
