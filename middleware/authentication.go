@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -58,6 +59,15 @@ func AuthenticationMiddleware(
 		return nil, err
 	}
 
+	// Helper to normalize token (strip "Bearer " if present)
+	trimBearer := func(s string) string {
+		const p = "Bearer "
+		if len(s) >= len(p) && strings.EqualFold(s[:len(p)], p) {
+			return s[len(p):]
+		}
+		return s
+	}
+
 	// Create and return the JWT middleware
 	return middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
 		// Choose where you want to read the token:
@@ -75,7 +85,8 @@ func AuthenticationMiddleware(
 			return false
 		},
 
-		Validator: func(token string, c echo.Context) (bool, error) {
+		Validator: func(raw string, c echo.Context) (bool, error) {
+			token := trimBearer(raw)
 
 			if token == "" {
 				logger.Error(c.Request().Context(), "Token is empty.")
