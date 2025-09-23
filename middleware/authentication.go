@@ -131,7 +131,10 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				},
 			}
 
-			producer.Send(c.Request().Context(), requestID.String(), eventMap)
+			kafkaErr := producer.Send(c.Request().Context(), requestID.String(), eventMap)
+			if kafkaErr != nil {
+				logger.Error(c.Request().Context(), "Failed to send auth success event to Kafka for target %s: %v", loginEvent.ID.String(), kafkaErr)
+			}
 			return true, nil
 		},
 		ErrorHandler: func(err error, c echo.Context) error {

@@ -75,7 +75,11 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			if err != nil {
 				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims.Sub)
 			}
-			defer resp.Body.Close()
+			defer func() {
+				if cerr := resp.Body.Close(); cerr != nil {
+					logger.Error(ctx, "Failed to close response body: %v", cerr)
+				}
+			}()
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
@@ -87,7 +91,9 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			}
 
 			// Cache result
-			cfg.APICache().Set(userID, body)
+			if err := cfg.APICache().Set(userID, body); err != nil {
+				logger.Error(ctx, "Failed to cache entitlement for user %s: %v", userID, err)
+			}
 
 			if !userIsMember(ctx, logger, body, roles) {
 				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims.Sub)
