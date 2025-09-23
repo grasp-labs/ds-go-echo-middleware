@@ -6,7 +6,7 @@ require (
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/google/uuid v1.6.0
-	github.com/grasp-labs/ds-event-stream-go-sdk v0.0.0-00010101000000-000000000000
+	github.com/grasp-labs/ds-event-stream-go-sdk v0.0.0-20250923095835-e71df8b5cbfa
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/labstack/gommon v0.4.2
 	github.com/stretchr/testify v1.10.0
@@ -29,5 +29,3 @@ require (
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/grasp-labs/ds-event-stream-go-sdk => /Users/janodvargrindheim/Documents/GitHub/ds-event-stream-go-sdk
