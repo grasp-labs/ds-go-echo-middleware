@@ -12,13 +12,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
 // AuditMiddleware returns an Echo middleware that emits audit logs to Kafka.
-func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer interfaces.Producer) echo.MiddlewareFunc {
+func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			request := c.Request()
@@ -54,10 +56,16 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer i
 				requestID = uuid.New()
 			}
 
+			tenantID, err := userContext.GetTenantId()
+			if err != nil {
+				logger.Error(c.Request().Context(), "Invalid tenant_id from userContext: %s", userContext.Rsc)
+				return err
+			}
+
 			// Metadata extraction
-			entry := models.AuditEntry{
+			auditEvent := models.AuditEntry{
 				ID:         requestID,
-				TenantID:   userContext.GetTenantId(),
+				TenantID:   tenantID,
 				Subject:    userContext.Sub,
 				Jti:        userContext.Jti,
 				HTTPMethod: request.Method,
@@ -71,9 +79,29 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer i
 				Payload:    payload,
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), entry.ID.String(), entry)
+			auditMap := sdkmodels.EventJson{
+				Id:          auditEvent.ID,
+				TenantId:    auditEvent.TenantID,
+				EventType:   "audit.log",
+				EventSource: auditEvent.Service,
+				Timestamp:   auditEvent.Timestamp,
+				Payload: &map[string]interface{}{
+					"jti":         auditEvent.Jti,
+					"http_method": auditEvent.HTTPMethod,
+					"resource":    auditEvent.Resource,
+					"endpoint":    auditEvent.Endpoint,
+					"full_url":    auditEvent.FullURL,
+					"source_ip":   auditEvent.SourceIP,
+					"user_agent":  auditEvent.UserAgent,
+					"service":     auditEvent.Service,
+					"payload":     auditEvent.Payload,
+					"subject":     auditEvent.Subject,
+				},
+			}
+
+			kafkaErr := producer.Send(c.Request().Context(), auditEvent.ID.String(), auditMap)
 			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send audit entry to Kafka for target %s: %v", entry.ID.String(), err)
+				logger.Error(c.Request().Context(), "Failed to send audit entry to Kafka for target %s: %v", auditEvent.ID.String(), kafkaErr)
 			}
 
 			return err

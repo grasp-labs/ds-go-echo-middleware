@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
@@ -24,7 +26,7 @@ type Entitlement struct {
 
 // AuthorizationMiddleware for asserting a user is permitted
 // to perform action.
-func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer interfaces.Producer) echo.MiddlewareFunc {
+func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer *adapters.ProducerAdapter) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
@@ -133,7 +135,7 @@ func errorHandler(
 	message string,
 	err error,
 	logger interfaces.Logger,
-	producer interfaces.Producer,
+	producer *adapters.ProducerAdapter,
 	eventType string,
 	subject string,
 ) error {
@@ -151,7 +153,7 @@ func errorHandler(
 		requestID = uuid.New()
 	}
 
-	producer.Send(echoCtx.Request().Context(), subject, models.AuthEvent{
+	authEvent := models.AuthEvent{
 		ID:         requestID,
 		Type:       eventType,
 		Subject:    subject,
@@ -160,7 +162,27 @@ func errorHandler(
 		UserAgent:  echoCtx.Request().UserAgent(),
 		RemoteAddr: echoCtx.Request().RemoteAddr,
 		Timestamp:  time.Now().UTC(),
-	})
+	}
+
+	eventMap := sdkmodels.EventJson{
+		Id:          authEvent.ID,
+		TenantId:    authEvent.TenantID,
+		EventType:   authEvent.Type,
+		EventSource: authEvent.ServiceName,
+		Timestamp:   authEvent.Timestamp,
+		Payload: &map[string]interface{}{
+			"subject":     authEvent.Subject,
+			"error":       authEvent.Error,
+			"path":        authEvent.Path,
+			"user_agent":  authEvent.UserAgent,
+			"remote_addr": authEvent.RemoteAddr,
+		},
+	}
+
+	kafkaErr := producer.Send(echoCtx.Request().Context(), authEvent.ID.String(), eventMap)
+	if kafkaErr != nil {
+		logger.Error(echoCtx.Request().Context(), "Failed to send auth event to Kafka for target %s: %v", authEvent.ID.String(), kafkaErr)
+	}
 
 	return echoCtx.JSON(status, map[string]string{"error": message})
 }

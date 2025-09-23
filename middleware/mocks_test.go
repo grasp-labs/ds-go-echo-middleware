@@ -6,6 +6,7 @@ import (
 
 	"github.com/allegro/bigcache/v3"
 	"github.com/google/uuid"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
 )
 
 type mockLogger struct {
@@ -59,4 +60,19 @@ func (p *mockProducer) Send(ctx context.Context, key string, value any) error {
 
 func (p *mockProducer) Close() error {
 	return nil
+}
+
+func (m *mockProducer) SendEvent(ctx context.Context, key string, value any) error {
+	m.called = true
+	m.key = key
+	m.value = value
+	return nil
+}
+
+func NewTestUserContext(sub string, rsc string) *models.Context {
+	return &models.Context{
+		Sub: sub,
+		Jti: uuid.New(),
+		Rsc: rsc,
+	}
 }
