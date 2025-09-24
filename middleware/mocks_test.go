@@ -51,13 +51,6 @@ type mockProducer struct {
 	value  any
 }
 
-func (p *mockProducer) Send(ctx context.Context, key string, value any) error {
-	p.called = true
-	p.key = key
-	p.value = value
-	return nil
-}
-
 func (p *mockProducer) Close() error {
 	return nil
 }
