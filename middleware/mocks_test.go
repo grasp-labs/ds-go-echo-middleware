@@ -55,7 +55,7 @@ func (p *mockProducer) Close() error {
 	return nil
 }
 
-func (m *mockProducer) SendEvent(ctx context.Context, key string, value any) error {
+func (m *mockProducer) Send(ctx context.Context, key string, value any) error {
 	m.called = true
 	m.key = key
 	m.value = value

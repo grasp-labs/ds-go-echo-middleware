@@ -19,7 +19,7 @@ type mockProducer struct {
 	value  any
 }
 
-func (m *mockProducer) SendEvent(ctx context.Context, key string, value any) error {
+func (m *mockProducer) Send(ctx context.Context, key string, value any) error {
 	m.called = true
 	m.key = key
 	m.value = value
