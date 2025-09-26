@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,7 +42,6 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			tenantID, err := userContext.GetTenantId()
 			if err != nil {
 				logger.Error(c.Request().Context(), "invalid tenant_id from userContext: %s", userContext.Rsc)
-				return err
 			}
 
 			// Optional owner ID from header
@@ -67,7 +65,6 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 					{"service_name": cfg.Name()},
 				},
 			}
-			fmt.Println("ProductID is", entry.ProductID) // DEBUG
 
 			eventMap := sdkmodels.EventJson{
 				Id:        entry.ID,

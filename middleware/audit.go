@@ -59,7 +59,6 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			tenantID, err := userContext.GetTenantId()
 			if err != nil {
 				logger.Error(c.Request().Context(), "Invalid tenant_id from userContext: %s", userContext.Rsc)
-				return err
 			}
 
 			// Metadata extraction

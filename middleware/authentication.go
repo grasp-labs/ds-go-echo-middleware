@@ -102,7 +102,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 			tenantID, err := claims.GetTenantId()
 			if err != nil {
 				logger.Error(c.Request().Context(), "Invalid tenant_id from claims: %s", claims.Rsc)
-				return false, echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
+				return false, echo.NewHTTPError(http.StatusBadRequest, "Ivalid tenant_id from claims.")
 			}
 
 			loginEvent := models.AuthEvent{
