@@ -92,21 +92,21 @@ func AuthenticationMiddleware(
 
 			if token == "" {
 				logger.Error(c.Request().Context(), "Token is empty.")
-				return false, echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
+				return false, WrapErr(c, "unauthorized")
 			}
 
 			claims := &models.Context{}
 			parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
 					logger.Error(c.Request().Context(), "unexpected signing method: %v", t.Header["alg"])
-					return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+					return false, WrapErr(c, "unauthorized")
 				}
 				return publicKey, nil
 			})
 
 			if err != nil || !parsed.Valid {
 				logger.Error(c.Request().Context(), "Invalid token: %v", err)
-				return false, echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
+				return false, WrapErr(c, "unauthorized")
 			}
 
 			// Stash claims in Echo context (typed key) and standard context
@@ -135,7 +135,10 @@ func AuthenticationMiddleware(
 				RemoteAddr:  c.Request().RemoteAddr,
 				Timestamp:   time.Now().UTC(),
 			}
-			producer.Send(c.Request().Context(), requestID.String(), loginEvent)
+			err = producer.Send(c.Request().Context(), requestID.String(), loginEvent)
+			if err != nil {
+				logger.Error(c.Request().Context(), "failed to send message: %v", err)
+			}
 			return true, nil
 		},
 		ErrorHandler: func(handlerErr error, c echo.Context) error {
@@ -157,8 +160,10 @@ func AuthenticationMiddleware(
 				Error:      handlerErr.Error(),
 				Timestamp:  time.Now().UTC(),
 			}
-			producer.Send(c.Request().Context(), requestID.String(), loginEvent)
-			return echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
+			if err := producer.Send(c.Request().Context(), requestID.String(), loginEvent); err != nil {
+				logger.Error(c.Request().Context(), "failed to send message: %v", err)
+			}
+			return WrapErr(c, "unauthorized")
 		},
 	}), nil
 }

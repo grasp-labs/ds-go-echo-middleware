@@ -73,7 +73,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			if err != nil {
 				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims.Sub)
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
@@ -85,7 +85,10 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			}
 
 			// Cache result
-			cfg.APICache().Set(userID, body)
+			err = cfg.APICache().Set(userID, body)
+			if err != nil {
+				logger.Error(ctx, "failed to set %s in cache", userID)
+			}
 
 			if !userIsMember(ctx, logger, body, roles) {
 				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims.Sub)
@@ -128,7 +131,7 @@ func userIsMember(ctx context.Context, logger interfaces.Logger, responseBody []
 }
 
 func errorHandler(
-	echoCtx echo.Context,
+	c echo.Context,
 	status int,
 	message string,
 	err error,
@@ -138,29 +141,31 @@ func errorHandler(
 	subject string,
 ) error {
 	if err != nil {
-		logger.Error(echoCtx.Request().Context(), "%s: %v", message, err)
+		logger.Error(c.Request().Context(), "%s: %v", message, err)
 	} else {
-		logger.Error(echoCtx.Request().Context(), "%s", message)
+		logger.Error(c.Request().Context(), "%s", message)
 	}
 
 	// Parse (or generate) request ID set byt RequestID middleware
-	requestIDStr := requestctx.GetRequestID(echoCtx.Request().Context())
+	requestIDStr := requestctx.GetRequestID(c.Request().Context())
 	requestID, err := uuid.Parse(requestIDStr)
 	if err != nil {
-		logger.Error(echoCtx.Request().Context(), "Invalid request_id from context: %v", err)
+		logger.Error(c.Request().Context(), "Invalid request_id from context: %v", err)
 		requestID = uuid.New()
 	}
 
-	producer.Send(echoCtx.Request().Context(), subject, models.AuthEvent{
+	err = producer.Send(c.Request().Context(), subject, models.AuthEvent{
 		ID:         requestID,
 		Type:       eventType,
 		Subject:    subject,
 		Error:      message,
-		Path:       echoCtx.Path(),
-		UserAgent:  echoCtx.Request().UserAgent(),
-		RemoteAddr: echoCtx.Request().RemoteAddr,
+		Path:       c.Path(),
+		UserAgent:  c.Request().UserAgent(),
+		RemoteAddr: c.Request().RemoteAddr,
 		Timestamp:  time.Now().UTC(),
 	})
-
-	return echoCtx.JSON(status, map[string]string{"error": message})
+	if err != nil {
+		logger.Error(c.Request().Context(), "failed to send message: %v", err)
+	}
+	return WrapErr(c, "forbidden")
 }
