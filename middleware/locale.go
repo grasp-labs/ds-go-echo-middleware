@@ -36,6 +36,16 @@ func LocaleFromHeader(c echo.Context, def string) string {
 	return base.String()
 }
 
+// Locale is a helper function that safely parse
+// inerface to string, returning def (default) on err
+func Locale(c echo.Context, def string) string {
+	v := c.Get("locale")
+	if s, ok := v.(string); ok && s != "" {
+		return s
+	}
+	return def
+}
+
 // LocaleMiddleware to
 //
 // # Example:

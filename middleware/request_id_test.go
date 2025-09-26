@@ -35,7 +35,7 @@ func TestRequestIDMiddleware_GeneratesID(t *testing.T) {
 	e.ServeHTTP(rec, req)
 
 	res := rec.Result()
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	// Assert response has a valid UUID
 	headerID := res.Header.Get("X-Request-ID")
