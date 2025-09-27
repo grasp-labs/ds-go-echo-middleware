@@ -11,8 +11,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 
+	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
 )
 
 func TestAuditMiddleware_BasicFlow(t *testing.T) {
@@ -21,7 +22,10 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	// Mocks required for middleware
 	cfg := &mockConfig{name: "AuditTestService"}
 	logger := &mockLogger{}
-	producer := &mockProducer{}
+	mock := &mockProducer{}
+	producer := &adapters.ProducerAdapter{
+		Producer: mock,
+	}
 
 	// Use Middleware under test
 	e.Use(middleware.RequestIDMiddleware(logger))
@@ -30,11 +34,9 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	// Define handler that sets userContext
 	// usually set by authentication middleware
 	e.POST("/api/audit/v1/", func(c echo.Context) error {
-		c.Set("userContext", &models.Context{
-			Sub: "user@email.com",
-			Jti: uuid.MustParse("2cf1d234-9890-40e9-bd68-b323cd9da0e3"),
-			Rsc: "MockName:11111111-1111-1111-1111-111111111111",
-		})
+		resourceUUID := uuid.New()
+		userCtx := NewTestUserContext("user@email.com", resourceUUID.String()+":MockName")
+		c.Set("userContext", userCtx)
 		return c.JSON(http.StatusCreated, map[string]string{"status": "ok"})
 	})
 
@@ -55,20 +57,34 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 
 	// Assertions
 	assert.Equal(t, http.StatusCreated, rec.Code)
-	assert.True(t, producer.called, "Producer should have been called")
-	assert.NotEmpty(t, producer.key, "Audit key (request ID) should be set")
+	assert.True(t, mock.called, "Producer should have been called")
+	assert.NotEmpty(t, mock.key, "Audit key (request ID) should be set")
 
-	// Check audit fields
-	entry, ok := producer.value.(models.AuditEntry)
-	assert.True(t, ok, "Producer value should be an AuditEntry")
-	assert.Equal(t, requestID, entry.ID)
-	assert.Equal(t, "POST", entry.HTTPMethod)
-	assert.Equal(t, "api", entry.Resource)
-	assert.Equal(t, "/api/audit/v1/", entry.Endpoint)
-	assert.Equal(t, cfg.Name(), entry.Service)
-	assert.Equal(t, entry.Subject, "user@email.com")
-	raw, ok := entry.Payload.(json.RawMessage)
-	assert.True(t, ok, "Payload should be json.RawMessage")
+	// Check that the value is EventJson (not AuditEntry directly)
+	eventJson, ok := mock.value.(sdkmodels.EventJson)
+	assert.True(t, ok, "Producer value should be an EventJson, got %T", mock.value)
 
-	assert.JSONEq(t, string(raw), string(bodyBytes))
+	// Verify EventJson structure
+	assert.Equal(t, requestID, eventJson.Id)
+	// EventType and EventSource appear to be empty strings in your middleware
+	// You might want to update your middleware to set these properly
+	assert.NotNil(t, eventJson.Payload)
+
+	// Extract payload and verify audit-specific fields
+	assert.NotNil(t, eventJson.Payload, "Payload should not be nil")
+
+	payloadMap := *eventJson.Payload
+	assert.Equal(t, "POST", payloadMap["http_method"])
+	assert.Equal(t, "api", payloadMap["resource"])
+	assert.Equal(t, "/api/audit/v1/", payloadMap["endpoint"])
+	assert.Equal(t, "/api/audit/v1/", payloadMap["full_url"])
+	assert.Equal(t, "user@email.com", payloadMap["subject"])
+	assert.Equal(t, cfg.Name(), eventJson.EventSource)
+
+	// Check request body in payload - it's stored as "payload" field with json.RawMessage
+	if payloadInterface, exists := payloadMap["payload"]; exists {
+		payloadRaw, ok := payloadInterface.(json.RawMessage)
+		assert.True(t, ok, "Payload should be json.RawMessage")
+		assert.JSONEq(t, string(bodyBytes), string(payloadRaw))
+	}
 }

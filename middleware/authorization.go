@@ -11,7 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
+	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
@@ -24,20 +26,21 @@ type Entitlement struct {
 
 // AuthorizationMiddleware for asserting a user is permitted
 // to perform action.
-func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer interfaces.Producer) echo.MiddlewareFunc {
+func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer *adapters.ProducerAdapter) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
+			claims := &models.Context{}
 
 			// Get userContext from Echo context
 			userContext := c.Get("userContext")
 			if userContext == nil {
-				return errorHandler(c, http.StatusUnauthorized, "User context not found", nil, logger, producer, "authz.denied", "")
+				return errorHandler(c, http.StatusUnauthorized, "User context not found", nil, logger, producer, "authz.denied", claims)
 			}
 
 			claims, ok := userContext.(*models.Context)
 			if !ok {
-				return errorHandler(c, http.StatusUnauthorized, "Invalid user context type", nil, logger, producer, "authz.denied", "")
+				return errorHandler(c, http.StatusUnauthorized, "Invalid user context type", nil, logger, producer, "authz.denied", claims)
 			}
 
 			// Get token from Echo Context set by Authorization middleware
@@ -45,7 +48,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Safely assert the value to a string
 			authToken, ok := authorization.(string)
 			if !ok {
-				return errorHandler(c, http.StatusUnauthorized, "Failed to assert authorization as string", nil, logger, producer, "authz.denied", claims.Sub)
+				return errorHandler(c, http.StatusUnauthorized, "Failed to assert authorization as string", nil, logger, producer, "authz.denied", claims)
 
 			}
 
@@ -64,24 +67,24 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Make external entitlement API call
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims.Sub)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims)
 			}
 			req.Header.Set("Authorization", authToken)
 
 			client := &http.Client{Timeout: 5 * time.Second}
 			resp, err := client.Do(req)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims.Sub)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims)
 			}
 			defer func() { _ = resp.Body.Close() }()
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims.Sub)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims)
 			}
 
 			if resp.StatusCode != http.StatusOK {
-				return errorHandler(c, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims.Sub)
+				return errorHandler(c, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims)
 			}
 
 			// Cache result
@@ -91,7 +94,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			}
 
 			if !userIsMember(ctx, logger, body, roles) {
-				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims.Sub)
+				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims)
 			}
 
 			logger.Info(ctx, "Entitlement accepts request for user: %s", userID)
@@ -136,9 +139,9 @@ func errorHandler(
 	message string,
 	err error,
 	logger interfaces.Logger,
-	producer interfaces.Producer,
+	producer *adapters.ProducerAdapter,
 	eventType string,
-	subject string,
+	claims *models.Context,
 ) error {
 	if err != nil {
 		logger.Error(c.Request().Context(), "%s: %v", message, err)
@@ -154,18 +157,30 @@ func errorHandler(
 		requestID = uuid.New()
 	}
 
-	err = producer.Send(c.Request().Context(), subject, models.AuthEvent{
-		ID:         requestID,
-		Type:       eventType,
-		Subject:    subject,
-		Error:      message,
-		Path:       c.Path(),
-		UserAgent:  c.Request().UserAgent(),
-		RemoteAddr: c.Request().RemoteAddr,
-		Timestamp:  time.Now().UTC(),
-	})
+	tenantID, err := claims.GetTenantId()
 	if err != nil {
-		logger.Error(c.Request().Context(), "failed to send message: %v", err)
+		tenantID = uuid.UUID{}
 	}
+
+	event := sdkmodels.EventJson{
+		Id:          requestID,
+		TenantId:    tenantID,
+		EventType:   eventType,
+		EventSource: "",
+		Timestamp:   time.Now().UTC(),
+		Payload: &map[string]any{
+			"subject":     claims.Sub,
+			"error":       message,
+			"path":        c.Path(),
+			"user_agent":  c.Request().UserAgent(),
+			"remote_addr": c.Request().RemoteAddr,
+		},
+	}
+
+	kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
+	if kafkaErr != nil {
+		logger.Error(c.Request().Context(), "Failed to send auth event to Kafka for target %s: %v", event.Id.String(), kafkaErr)
+	}
+
 	return WrapErr(c, "forbidden")
 }

@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -25,12 +26,16 @@ type Context struct {
 	Rol []string `json:"rol"` // Roles (array of strings)
 }
 
-func (c Context) GetTenantId() uuid.UUID {
-	tenantId, err := uuid.Parse(strings.Split(c.Rsc, ":")[0])
-	if err != nil {
-		return uuid.Nil
+func (c Context) GetTenantId() (uuid.UUID, error) {
+	parts := strings.Split(c.Rsc, ":")
+	if len(parts) < 2 || parts[0] == "" {
+		return uuid.Nil, errors.New("rsc field is empty or malformed")
 	}
-	return tenantId
+	tenantId, err := uuid.Parse(parts[0])
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("error parsing tenant ID: %w", err)
+	}
+	return tenantId, nil
 }
 
 func (c Context) GetTenantName() string {

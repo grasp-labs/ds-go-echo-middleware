@@ -1,6 +1,10 @@
 package requestctx
 
-import "context"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 type ctxKey string
 
@@ -15,4 +19,13 @@ func GetRequestID(ctx context.Context) string {
 // SetRequestID sets the request ID in the context.
 func SetRequestID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, requestIDKey, id)
+}
+
+func GetOrNewRequestUUID(ctx context.Context) uuid.UUID {
+	if v, ok := ctx.Value(requestIDKey).(string); ok {
+		if u, err := uuid.Parse(v); err == nil {
+			return u
+		}
+	}
+	return uuid.New()
 }

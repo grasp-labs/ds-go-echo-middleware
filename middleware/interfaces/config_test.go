@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 )
 
 type mockConfig struct {

@@ -9,16 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
+	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
+	ctx "github.com/grasp-labs/ds-go-echo-middleware/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
 // AuditMiddleware returns an Echo middleware that emits audit logs to Kafka.
-func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer interfaces.Producer) echo.MiddlewareFunc {
+func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			request := c.Request()
@@ -39,41 +40,48 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer i
 			callErr := next(c)
 
 			// Resolve user context
-			userContext, ok := c.Get("userContext").(*models.Context)
-			if !ok || userContext == nil {
+			claims, ok := c.Get("userContext").(*ctx.Context)
+			if !ok || claims == nil {
 				logger.Info(request.Context(), "Missing or invalid userContext.")
 				// Is usercontext is wrong (any scenario) - eject
 				return WrapErr(c, "uauthorized")
 			}
 
 			// Parse (or generate) request ID set byt RequestID middleware
-			requestIDStr := requestctx.GetRequestID(c.Request().Context())
-			requestID, err := uuid.Parse(requestIDStr)
+			requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
+
+			// Parse (or generate) session ID set byt RequestID middleware
+			sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
+
+			tenantID, err := claims.GetTenantId()
 			if err != nil {
-				logger.Error(c.Request().Context(), "Invalid request_id from context: %v", err)
-				requestID = uuid.New()
+				logger.Error(c.Request().Context(), "Invalid tenant_id from userContext: %s", claims.Rsc)
+				return err
 			}
 
-			// Metadata extraction
-			entry := models.AuditEntry{
-				ID:         requestID,
-				TenantID:   userContext.GetTenantId(),
-				Subject:    userContext.Sub,
-				Jti:        userContext.Jti,
-				HTTPMethod: request.Method,
-				Resource:   deriveResource(c.Path()),
-				Timestamp:  time.Now().UTC(),
-				SourceIP:   request.RemoteAddr,
-				UserAgent:  request.UserAgent(),
-				Service:    cfg.Name(),
-				Endpoint:   c.Path(),
-				FullURL:    request.URL.String(),
-				Payload:    payload,
+			event := sdkmodels.EventJson{
+				Id:          requestID,
+				SessionId:   sessionID,
+				TenantId:    tenantID,
+				EventType:   "audit.log",
+				EventSource: cfg.Name(),
+				Timestamp:   time.Now().UTC(),
+				Payload: &map[string]any{
+					"jti":         claims.Jti,
+					"http_method": request.Method,
+					"resource":    deriveResource(c.Path()),
+					"endpoint":    c.Path(),
+					"full_url":    request.URL.String(),
+					"source_ip":   request.RemoteAddr,
+					"user_agent":  request.UserAgent(),
+					"payload":     payload,
+					"subject":     claims.Sub,
+				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), entry.ID.String(), entry)
+			kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
 			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send audit entry to Kafka for target %s: %v", entry.ID.String(), err)
+				logger.Error(c.Request().Context(), "Failed to send audit entry to Kafka for target %s: %v", event.Id.String(), kafkaErr)
 			}
 
 			return callErr

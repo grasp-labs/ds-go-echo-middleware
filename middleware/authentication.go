@@ -15,7 +15,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
+	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
@@ -46,14 +48,8 @@ func ParseRSAPublicKey(pemKey string) (*rsa.PublicKey, error) {
 }
 
 // AuthenticationMiddleware returns the JWT middleware configured with a validator
-func AuthenticationMiddleware(
-	cfg interfaces.Config,
-	logger interfaces.Logger,
-	publicKeyPEM string,
-	producer interfaces.Producer,
-) (echo.MiddlewareFunc, error) {
-
-	// Parse RSA public key once
+func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, publicKeyPEM string, producer *adapters.ProducerAdapter) (echo.MiddlewareFunc, error) {
+	// Parse the public key from PEM format
 	publicKey, err := ParseRSAPublicKey(publicKeyPEM)
 	if err != nil {
 		return nil, err
@@ -124,20 +120,30 @@ func AuthenticationMiddleware(
 				logger.Error(c.Request().Context(), "Invalid request_id from context: %v", err)
 				requestID = uuid.New()
 			}
-			loginEvent := models.AuthEvent{
-				ID:          requestID,
-				ServiceName: cfg.Name(),
-				Type:        "login.success",
-				Subject:     claims.Sub,
-				TenantID:    claims.GetTenantId(),
-				Path:        c.Path(),
-				UserAgent:   c.Request().UserAgent(),
-				RemoteAddr:  c.Request().RemoteAddr,
-				Timestamp:   time.Now().UTC(),
-			}
-			err = producer.Send(c.Request().Context(), requestID.String(), loginEvent)
+
+			tenantID, err := claims.GetTenantId()
 			if err != nil {
-				logger.Error(c.Request().Context(), "failed to send message: %v", err)
+				logger.Error(c.Request().Context(), "Invalid tenant_id from claims: %s", claims.Rsc)
+				return false, WrapErr(c, "unauthorized")
+			}
+
+			event := sdkmodels.EventJson{
+				Id:          requestID,
+				TenantId:    tenantID,
+				EventType:   "login.success", // Check this
+				EventSource: cfg.Name(),
+				Timestamp:   time.Now().UTC(),
+				Payload: &map[string]any{
+					"subject":     claims.Sub,
+					"path":        c.Path(),
+					"user_agent":  c.Request().UserAgent(),
+					"remote_addr": c.Request().RemoteAddr,
+				},
+			}
+
+			kafkaErr := producer.Send(c.Request().Context(), requestID.String(), event)
+			if kafkaErr != nil {
+				logger.Error(c.Request().Context(), "Failed to send auth success event to Kafka for target %s: %v", event.Id.String(), kafkaErr)
 			}
 			return true, nil
 		},
@@ -151,18 +157,25 @@ func AuthenticationMiddleware(
 				requestID = uuid.New()
 			}
 
-			loginEvent := models.AuthEvent{
-				ID:         requestID,
-				Type:       "login.failure",
-				UserAgent:  c.Request().UserAgent(),
-				RemoteAddr: c.Request().RemoteAddr,
-				Path:       c.Path(),
-				Error:      handlerErr.Error(),
-				Timestamp:  time.Now().UTC(),
+			event := sdkmodels.EventJson{
+				Id:          requestID,
+				TenantId:    uuid.UUID{},
+				EventType:   "login.failure", // Check this
+				EventSource: cfg.Name(),
+				Timestamp:   time.Now().UTC(),
+				Payload: &map[string]interface{}{
+					"subject":     "",
+					"path":        c.Path(),
+					"user_agent":  c.Request().UserAgent(),
+					"remote_addr": c.Request().RemoteAddr,
+				},
 			}
-			if err := producer.Send(c.Request().Context(), requestID.String(), loginEvent); err != nil {
-				logger.Error(c.Request().Context(), "failed to send message: %v", err)
+
+			kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
+			if kafkaErr != nil {
+				logger.Error(c.Request().Context(), "Failed to send auth failure event to Kafka for target %s: %v", event.Id.String(), kafkaErr)
 			}
+
 			return WrapErr(c, "unauthorized")
 		},
 	}), nil
