@@ -8,7 +8,8 @@ import (
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
+	ctx "github.com/grasp-labs/ds-go-echo-middleware/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
@@ -24,8 +25,8 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			callErr := next(c)
 
 			// Retrieve user context
-			userContext, ok := c.Get("userContext").(*models.Context)
-			if !ok || userContext == nil {
+			claims, ok := c.Get("userContext").(*ctx.Context)
+			if !ok || claims == nil {
 				logger.Error(request.Context(), "Missing or invalid userContext")
 				// Is usercontext is wrong (any scenario) - eject
 				return WrapErr(c, "uauthorized")
@@ -40,9 +41,10 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				logger.Error(c.Request().Context(), "invalid request_id from context: %v", err)
 				requestID = uuid.New()
 			}
-			tenantID, err := userContext.GetTenantId()
+			tenantID, err := claims.GetTenantId()
 			if err != nil {
-				logger.Error(c.Request().Context(), "invalid tenant_id from userContext: %s", userContext.Rsc)
+				logger.Error(c.Request().Context(), "invalid tenant_id from userContext: %s", claims.Rsc)
+				return err
 			}
 
 			// Optional owner ID from header
@@ -51,41 +53,25 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				ownerID = &val
 			}
 
-			// Build usage entry
-			entry := models.UsageEntry{
-				ID:             requestID,
-				TenantID:       tenantID,
-				OwnerID:        ownerID,
-				ProductID:      cfg.ProductID(),
-				MemoryMB:       cfg.MemoryLimitMB(),
-				StartTimestamp: startTimestamp,
-				EndTimestamp:   endTimestamp,
-				Status:         models.Draft,
-				Metadata: []map[string]string{
-					{"user_id": userContext.Sub},
-					{"service_name": cfg.Name()},
+			event := sdkmodels.EventJson{
+				Id:        requestID,
+				TenantId:  tenantID,
+				OwnerId:   ownerID,
+				Timestamp: startTimestamp,
+				Payload: &map[string]any{
+					"product_id":   cfg.ProductID(),
+					"memory_mb":    cfg.MemoryLimitMB(),
+					"start_time":   startTimestamp,
+					"end_time":     endTimestamp,
+					"status":       models.Draft,
+					"user_id":      claims.Sub,
+					"service_name": cfg.Name(),
 				},
 			}
 
-			eventMap := sdkmodels.EventJson{
-				Id:        entry.ID,
-				TenantId:  entry.TenantID,
-				OwnerId:   entry.OwnerID,
-				Timestamp: entry.StartTimestamp,
-				Payload: &map[string]interface{}{
-					"product_id":   entry.ProductID,
-					"memory_mb":    entry.MemoryMB,
-					"start_time":   entry.StartTimestamp,
-					"end_time":     entry.EndTimestamp,
-					"status":       entry.Status,
-					"user_id":      userContext.Sub, // safer and clearer
-					"service_name": cfg.Name(),      // safer and clearer
-				},
-			}
-
-			kafkaErr := producer.Send(c.Request().Context(), entry.ID.String(), eventMap)
+			kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
 			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send usage entry to Kafka for target %s: %v", entry.ID.String(), kafkaErr)
+				logger.Error(c.Request().Context(), "Failed to send usage entry to Kafka for target %s: %v", event.Id.String(), kafkaErr)
 			}
 
 			return callErr

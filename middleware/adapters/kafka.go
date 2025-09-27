@@ -6,8 +6,13 @@ import (
 
 	sdkKafka "github.com/grasp-labs/ds-event-stream-go-sdk/kafka"
 	sdkModels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 )
+
+type Producer interface {
+	Send(ctx context.Context, key string, value any) error
+	Close() error
+}
 
 type ProducerAdapter struct {
 	Producer interfaces.Producer
