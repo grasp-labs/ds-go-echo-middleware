@@ -21,13 +21,14 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			startTimestamp := time.Now().UTC()
 
 			// Call the actual handler
-			err := next(c)
+			callErr := next(c)
 
 			// Retrieve user context
 			userContext, ok := c.Get("userContext").(*models.Context)
 			if !ok || userContext == nil {
 				logger.Error(request.Context(), "Missing or invalid userContext")
-				return err
+				// Is usercontext is wrong (any scenario) - eject
+				return WrapErr(c, "uauthorized")
 			}
 
 			endTimestamp := time.Now().UTC()
@@ -87,7 +88,7 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				logger.Error(c.Request().Context(), "Failed to send usage entry to Kafka for target %s: %v", entry.ID.String(), kafkaErr)
 			}
 
-			return err // return whatever the handler returned
+			return callErr
 		}
 	}
 }

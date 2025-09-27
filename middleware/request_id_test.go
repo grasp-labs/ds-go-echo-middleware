@@ -35,11 +35,7 @@ func TestRequestIDMiddleware_GeneratesID(t *testing.T) {
 	e.ServeHTTP(rec, req)
 
 	res := rec.Result()
-	defer func() {
-		if cerr := res.Body.Close(); cerr != nil {
-			t.Errorf("Failed to close response body: %v", cerr)
-		}
-	}()
+	defer func() { _ = res.Body.Close() }()
 
 	// Assert response has a valid UUID
 	headerID := res.Header.Get("X-Request-ID")

@@ -13,7 +13,7 @@ import (
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
@@ -30,16 +30,17 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
+			claims := &models.Context{}
 
 			// Get userContext from Echo context
 			userContext := c.Get("userContext")
 			if userContext == nil {
-				return errorHandler(c, http.StatusUnauthorized, "User context not found", nil, logger, producer, "authz.denied", "")
+				return errorHandler(c, http.StatusUnauthorized, "User context not found", nil, logger, producer, "authz.denied", claims)
 			}
 
 			claims, ok := userContext.(*models.Context)
 			if !ok {
-				return errorHandler(c, http.StatusUnauthorized, "Invalid user context type", nil, logger, producer, "authz.denied", "")
+				return errorHandler(c, http.StatusUnauthorized, "Invalid user context type", nil, logger, producer, "authz.denied", claims)
 			}
 
 			// Get token from Echo Context set by Authorization middleware
@@ -47,7 +48,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Safely assert the value to a string
 			authToken, ok := authorization.(string)
 			if !ok {
-				return errorHandler(c, http.StatusUnauthorized, "Failed to assert authorization as string", nil, logger, producer, "authz.denied", claims.Sub)
+				return errorHandler(c, http.StatusUnauthorized, "Failed to assert authorization as string", nil, logger, producer, "authz.denied", claims)
 
 			}
 
@@ -66,37 +67,34 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Make external entitlement API call
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims.Sub)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims)
 			}
 			req.Header.Set("Authorization", authToken)
 
 			client := &http.Client{Timeout: 5 * time.Second}
 			resp, err := client.Do(req)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims.Sub)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims)
 			}
-			defer func() {
-				if cerr := resp.Body.Close(); cerr != nil {
-					logger.Error(ctx, "Failed to close response body: %v", cerr)
-				}
-			}()
+			defer func() { _ = resp.Body.Close() }()
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims.Sub)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims)
 			}
 
 			if resp.StatusCode != http.StatusOK {
-				return errorHandler(c, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims.Sub)
+				return errorHandler(c, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims)
 			}
 
 			// Cache result
-			if err := cfg.APICache().Set(userID, body); err != nil {
-				logger.Error(ctx, "Failed to cache entitlement for user %s: %v", userID, err)
+			err = cfg.APICache().Set(userID, body)
+			if err != nil {
+				logger.Error(ctx, "failed to set %s in cache", userID)
 			}
 
 			if !userIsMember(ctx, logger, body, roles) {
-				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims.Sub)
+				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims)
 			}
 
 			logger.Info(ctx, "Entitlement accepts request for user: %s", userID)
@@ -136,59 +134,53 @@ func userIsMember(ctx context.Context, logger interfaces.Logger, responseBody []
 }
 
 func errorHandler(
-	echoCtx echo.Context,
+	c echo.Context,
 	status int,
 	message string,
 	err error,
 	logger interfaces.Logger,
 	producer *adapters.ProducerAdapter,
 	eventType string,
-	subject string,
+	claims *models.Context,
 ) error {
 	if err != nil {
-		logger.Error(echoCtx.Request().Context(), "%s: %v", message, err)
+		logger.Error(c.Request().Context(), "%s: %v", message, err)
 	} else {
-		logger.Error(echoCtx.Request().Context(), "%s", message)
+		logger.Error(c.Request().Context(), "%s", message)
 	}
 
 	// Parse (or generate) request ID set byt RequestID middleware
-	requestIDStr := requestctx.GetRequestID(echoCtx.Request().Context())
+	requestIDStr := requestctx.GetRequestID(c.Request().Context())
 	requestID, err := uuid.Parse(requestIDStr)
 	if err != nil {
-		logger.Error(echoCtx.Request().Context(), "Invalid request_id from context: %v", err)
+		logger.Error(c.Request().Context(), "Invalid request_id from context: %v", err)
 		requestID = uuid.New()
 	}
 
-	authEvent := models.AuthEvent{
-		ID:         requestID,
-		Type:       eventType,
-		Subject:    subject,
-		Error:      message,
-		Path:       echoCtx.Path(),
-		UserAgent:  echoCtx.Request().UserAgent(),
-		RemoteAddr: echoCtx.Request().RemoteAddr,
-		Timestamp:  time.Now().UTC(),
+	tenantID, err := claims.GetTenantId()
+	if err != nil {
+		tenantID = uuid.UUID{}
 	}
 
-	eventMap := sdkmodels.EventJson{
-		Id:          authEvent.ID,
-		TenantId:    authEvent.TenantID,
-		EventType:   authEvent.Type,
-		EventSource: authEvent.ServiceName,
-		Timestamp:   authEvent.Timestamp,
-		Payload: &map[string]interface{}{
-			"subject":     authEvent.Subject,
-			"error":       authEvent.Error,
-			"path":        authEvent.Path,
-			"user_agent":  authEvent.UserAgent,
-			"remote_addr": authEvent.RemoteAddr,
+	event := sdkmodels.EventJson{
+		Id:          requestID,
+		TenantId:    tenantID,
+		EventType:   eventType,
+		EventSource: "",
+		Timestamp:   time.Now().UTC(),
+		Payload: &map[string]any{
+			"subject":     claims.Sub,
+			"error":       message,
+			"path":        c.Path(),
+			"user_agent":  c.Request().UserAgent(),
+			"remote_addr": c.Request().RemoteAddr,
 		},
 	}
 
-	kafkaErr := producer.Send(echoCtx.Request().Context(), authEvent.ID.String(), eventMap)
+	kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
 	if kafkaErr != nil {
-		logger.Error(echoCtx.Request().Context(), "Failed to send auth event to Kafka for target %s: %v", authEvent.ID.String(), kafkaErr)
+		logger.Error(c.Request().Context(), "Failed to send auth event to Kafka for target %s: %v", event.Id.String(), kafkaErr)
 	}
 
-	return echoCtx.JSON(status, map[string]string{"error": message})
+	return WrapErr(c, "forbidden")
 }

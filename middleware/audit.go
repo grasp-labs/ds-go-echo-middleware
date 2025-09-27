@@ -38,14 +38,14 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 
-			err := next(c)
+			callErr := next(c)
 
 			// Resolve user context
 			userContext, ok := c.Get("userContext").(*models.Context)
 			if !ok || userContext == nil {
 				logger.Info(request.Context(), "Missing or invalid userContext.")
-
-				return err
+				// Is usercontext is wrong (any scenario) - eject
+				return WrapErr(c, "uauthorized")
 			}
 
 			// Parse (or generate) request ID set byt RequestID middleware
@@ -103,7 +103,7 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				logger.Error(c.Request().Context(), "Failed to send audit entry to Kafka for target %s: %v", auditEvent.ID.String(), kafkaErr)
 			}
 
-			return err
+			return callErr
 		}
 	}
 }

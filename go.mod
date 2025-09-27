@@ -1,6 +1,6 @@
 module github.com/grasp-labs/ds-go-echo-middleware
 
-go 1.24.1
+go 1.25.0
 
 require (
 	github.com/allegro/bigcache/v3 v3.1.0
@@ -14,8 +14,7 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/klauspost/compress v1.15.9 // indirect
-	github.com/kr/pretty v0.3.0 // indirect
+	github.com/grasp-labs/ds-go-commonmodels/v2 v2.1.0-alpha.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
