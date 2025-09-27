@@ -47,7 +47,7 @@ func ParseRSAPublicKey(pemKey string) (*rsa.PublicKey, error) {
 }
 
 // AuthenticationMiddleware returns the JWT middleware configured with a validator
-func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, publicKeyPEM string, producer *adapters.ProducerAdapter) (echo.MiddlewareFunc, error) {
+func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, publicKeyPEM string, producer adapters.ProducerAdapter) (echo.MiddlewareFunc, error) {
 	// Parse the public key from PEM format
 	publicKey, err := ParseRSAPublicKey(publicKeyPEM)
 	if err != nil {
@@ -56,20 +56,30 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 
 	// Create and return the JWT middleware
 	return middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
+		// Choose where you want to read the token:
+		// - For Authorization header with optional "Bearer " prefix:
+		KeyLookup: "header:Authorization",
+		// - If you prefer X-Api-Key, change to: KeyLookup: "header:X-Api-Key"
+
+		AuthScheme: "Bearer",
+
+		Skipper: func(c echo.Context) bool {
+			// Let CORS preflight pass
+			if c.Request().Method == http.MethodOptions {
+				return true
+			}
+			return false
+		},
+
 		Validator: func(token string, c echo.Context) (bool, error) {
 
-			// Store authorization in the Echo context
-			c.Set("Authorization", "Bearer "+token)
-
 			if token == "" {
-				logger.Error(c.Request().Context(), "Token is none.")
-				// Return a 401 Unauthorized response when the token is missing
+				logger.Error(c.Request().Context(), "Token is empty.")
 				return false, echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
 			}
 
 			claims := &models.Context{}
-			parsedToken, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
-				// Ensure the signing method is RS256
+			parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
 					logger.Error(c.Request().Context(), "unexpected signing method: %v", t.Header["alg"])
 					return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
@@ -77,13 +87,12 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				return publicKey, nil
 			})
 
-			// Check if parsing and validation were successful
-			if err != nil || !parsedToken.Valid {
+			if err != nil || !parsed.Valid {
 				logger.Error(c.Request().Context(), "Invalid token: %v", err)
 				return false, echo.NewHTTPError(http.StatusUnauthorized, "Unauthorized.")
 			}
 
-			// Store the claims struct in the Echo context for handler usage
+			// Stash claims in Echo context (typed key) and standard context
 			c.Set("userContext", claims)
 
 			// Also inject into context.Context so it propagates downstream
@@ -137,15 +146,13 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 			}
 			return true, nil
 		},
-		ErrorHandler: func(err error, c echo.Context) error {
-			// Ensure the response is standardized with a 401 status
-			logger.Error(c.Request().Context(), "Jwt error: %v", err)
+		ErrorHandler: func(handlerErr error, c echo.Context) error {
+			logger.Error(c.Request().Context(), "Jwt error: %v", handlerErr)
 
-			// Should send Login Failure event
 			requestIDStr := requestctx.GetRequestID(c.Request().Context())
-			requestID, err := uuid.Parse(requestIDStr)
-			if err != nil {
-				logger.Error(c.Request().Context(), "Invalid request_id from context: %v", err)
+			requestID, parseErr := uuid.Parse(requestIDStr)
+			if parseErr != nil {
+				logger.Error(c.Request().Context(), "Invalid request_id from context: %v", parseErr)
 				requestID = uuid.New()
 			}
 
@@ -155,7 +162,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				UserAgent:  c.Request().UserAgent(),
 				RemoteAddr: c.Request().RemoteAddr,
 				Path:       c.Path(),
-				Error:      err.Error(),
+				Error:      handlerErr.Error(),
 				Timestamp:  time.Now().UTC(),
 			}
 
