@@ -6,7 +6,7 @@ require (
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/google/uuid v1.6.0
-	github.com/grasp-labs/ds-event-stream-go-sdk v0.0.0-20250923095835-e71df8b5cbfa
+	github.com/grasp-labs/ds-event-stream-go-sdk v0.0.0-20250929104511-2e32688d2361
 	github.com/grasp-labs/ds-go-commonmodels/v2 v2.1.0-alpha.1
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/labstack/gommon v0.4.2
