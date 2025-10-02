@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	sdkKafka "github.com/grasp-labs/ds-event-stream-go-sdk/kafka"
+	sdkKafka "github.com/grasp-labs/ds-event-stream-go-sdk/dskafka"
 	sdkModels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 )
