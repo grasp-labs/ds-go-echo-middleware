@@ -26,7 +26,7 @@ type Entitlement struct {
 
 // AuthorizationMiddleware for asserting a user is permitted
 // to perform action.
-func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer *adapters.ProducerAdapter) echo.MiddlewareFunc {
+func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
@@ -35,12 +35,12 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Get userContext from Echo context
 			userContext := c.Get("userContext")
 			if userContext == nil {
-				return errorHandler(c, http.StatusUnauthorized, "User context not found", nil, logger, producer, "authz.denied", claims)
+				return errorHandler(c, http.StatusUnauthorized, "User context not found", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
 			claims, ok := userContext.(*models.Context)
 			if !ok {
-				return errorHandler(c, http.StatusUnauthorized, "Invalid user context type", nil, logger, producer, "authz.denied", claims)
+				return errorHandler(c, http.StatusUnauthorized, "Invalid user context type", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
 			// Get token from Echo Context set by Authorization middleware
@@ -48,7 +48,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Safely assert the value to a string
 			authToken, ok := authorization.(string)
 			if !ok {
-				return errorHandler(c, http.StatusUnauthorized, "Failed to assert authorization as string", nil, logger, producer, "authz.denied", claims)
+				return errorHandler(c, http.StatusUnauthorized, "Failed to assert authorization as string", nil, logger, producer, "authz.denied", claims, topic)
 
 			}
 
@@ -67,24 +67,24 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Make external entitlement API call
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims, topic)
 			}
 			req.Header.Set("Authorization", authToken)
 
 			client := &http.Client{Timeout: 5 * time.Second}
 			resp, err := client.Do(req)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims, topic)
 			}
 			defer func() { _ = resp.Body.Close() }()
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims)
+				return errorHandler(c, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims, topic)
 			}
 
 			if resp.StatusCode != http.StatusOK {
-				return errorHandler(c, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims)
+				return errorHandler(c, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
 			// Cache result
@@ -94,7 +94,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			}
 
 			if !userIsMember(ctx, logger, body, roles) {
-				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims)
+				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
 			logger.Info(ctx, "Entitlement accepts request for user: %s", userID)
@@ -142,6 +142,7 @@ func errorHandler(
 	producer *adapters.ProducerAdapter,
 	eventType string,
 	claims *models.Context,
+	topic string,
 ) error {
 	if err != nil {
 		logger.Error(c.Request().Context(), "%s: %v", message, err)
@@ -177,9 +178,9 @@ func errorHandler(
 		},
 	}
 
-	kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
+	kafkaErr := producer.Send(c.Request().Context(), topic, event)
 	if kafkaErr != nil {
-		logger.Error(c.Request().Context(), "Failed to send auth event to Kafka for target %s: %v", event.Id.String(), kafkaErr)
+		logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", eventType, topic, event.Id.String(), kafkaErr)
 	}
 
 	return WrapErr(c, "forbidden")

@@ -10,7 +10,7 @@ import (
 )
 
 type Producer interface {
-	Send(ctx context.Context, key string, value any) error
+	Send(ctx context.Context, topic string, value any) error
 	Close() error
 }
 
@@ -18,8 +18,8 @@ type ProducerAdapter struct {
 	Producer interfaces.Producer
 }
 
-func (a *ProducerAdapter) Send(ctx context.Context, key string, value any) error {
-	return a.Producer.Send(ctx, key, value)
+func (a *ProducerAdapter) Send(ctx context.Context, topic string, value any) error {
+	return a.Producer.Send(ctx, topic, value)
 }
 
 func (a *ProducerAdapter) Close() error {
@@ -31,12 +31,12 @@ type KafkaProducerWrapper struct {
 	Producer *sdkKafka.Producer
 }
 
-func (w *KafkaProducerWrapper) Send(ctx context.Context, key string, value any) error {
+func (w *KafkaProducerWrapper) Send(ctx context.Context, topic string, value any) error {
 	event, ok := value.(sdkModels.EventJson)
 	if !ok {
 		return fmt.Errorf("KafkaProducerWrapper: value is not models.EventJson")
 	}
-	return w.Producer.SendEvent(ctx, key, event)
+	return w.Producer.SendEvent(ctx, topic, event)
 }
 
 func (w *KafkaProducerWrapper) Close() error {

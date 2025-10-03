@@ -19,7 +19,7 @@ import (
 )
 
 // AuditMiddleware returns an Echo middleware that emits audit logs to Kafka.
-func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter) echo.MiddlewareFunc {
+func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			request := c.Request()
@@ -79,9 +79,9 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
+			kafkaErr := producer.Send(c.Request().Context(), topic, event)
 			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send audit entry to Kafka for target %s: %v", event.Id.String(), kafkaErr)
+				logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", "audit.log", topic, event.Id.String(), kafkaErr)
 			}
 
 			return callErr
