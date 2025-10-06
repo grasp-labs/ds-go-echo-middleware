@@ -9,11 +9,6 @@ import (
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 )
 
-type Producer interface {
-	Send(ctx context.Context, topic string, value any) error
-	Close() error
-}
-
 type ProducerAdapter struct {
 	Producer interfaces.Producer
 }
