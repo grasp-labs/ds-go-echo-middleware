@@ -143,7 +143,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 
 			kafkaErr := producer.Send(c.Request().Context(), topic, event)
 			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send auth success event to Kafka for target %s: %v", event.Id.String(), kafkaErr)
+				logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", "login.success", topic, event.Id.String(), kafkaErr)
 			}
 			return true, nil
 		},
@@ -171,9 +171,9 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
+			kafkaErr := producer.Send(c.Request().Context(), topic, event)
 			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send auth failure event to Kafka for target %s: %v", event.Id.String(), kafkaErr)
+				logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", "login.failure", topic, event.Id.String(), kafkaErr)
 			}
 
 			return WrapErr(c, "unauthorized")
