@@ -48,7 +48,7 @@ func ParseRSAPublicKey(pemKey string) (*rsa.PublicKey, error) {
 }
 
 // AuthenticationMiddleware returns the JWT middleware configured with a validator
-func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, publicKeyPEM string, producer *adapters.ProducerAdapter) (echo.MiddlewareFunc, error) {
+func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, publicKeyPEM string, producer *adapters.ProducerAdapter, topic string) (echo.MiddlewareFunc, error) {
 	// Parse the public key from PEM format
 	publicKey, err := ParseRSAPublicKey(publicKeyPEM)
 	if err != nil {
@@ -141,7 +141,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), requestID.String(), event)
+			kafkaErr := producer.Send(c.Request().Context(), topic, event)
 			if kafkaErr != nil {
 				logger.Error(c.Request().Context(), "Failed to send auth success event to Kafka for target %s: %v", event.Id.String(), kafkaErr)
 			}
