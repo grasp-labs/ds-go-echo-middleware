@@ -31,10 +31,11 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 	producer := &adapters.ProducerAdapter{
 		Producer: mock,
 	}
+	topic := "test_topic"
 
 	// Use Middleware under test
 	e.Use(middleware.RequestIDMiddleware(logger))
-	e.Use(middleware.UsageMiddleware(cfg, logger, producer))
+	e.Use(middleware.UsageMiddleware(cfg, logger, producer, topic))
 
 	// Define handler that sets userContext
 	e.POST("/api/usage/v1/", func(c echo.Context) error {
