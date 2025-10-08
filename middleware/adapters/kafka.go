@@ -29,7 +29,7 @@ type KafkaProducerWrapper struct {
 func (w *KafkaProducerWrapper) Send(ctx context.Context, topic string, value any) error {
 	event, ok := value.(sdkmodels.EventJson)
 	if !ok {
-		return fmt.Errorf("KafkaProducerWrapper: value must be of type sdkmodels.EventJson")
+		return fmt.Errorf("KafkaProducerWrapper: value is not sdkmodels.EventJson")
 	}
 	return w.Producer.SendEvent(ctx, topic, event)
 }
