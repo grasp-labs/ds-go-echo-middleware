@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/grasp-labs/ds-event-stream-go-sdk/dskafka"
-	"github.com/grasp-labs/ds-event-stream-go-sdk/models"
+	dskafka "github.com/grasp-labs/ds-event-stream-go-sdk/dskafka"
+	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 )
 
@@ -27,9 +27,9 @@ type KafkaProducerWrapper struct {
 }
 
 func (w *KafkaProducerWrapper) Send(ctx context.Context, topic string, value any) error {
-	event, ok := value.(models.EventJson)
+	event, ok := value.(sdkmodels.EventJson)
 	if !ok {
-		return fmt.Errorf("KafkaProducerWrapper: value is not models.EventJson")
+		return fmt.Errorf("KafkaProducerWrapper: value is not sdkmodels.EventJson")
 	}
 	return w.Producer.SendEvent(ctx, topic, event)
 }
