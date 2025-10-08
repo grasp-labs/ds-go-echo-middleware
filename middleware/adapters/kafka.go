@@ -4,22 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	sdkKafka "github.com/grasp-labs/ds-event-stream-go-sdk/dskafka"
-	sdkModels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
+	dskafka "github.com/grasp-labs/ds-event-stream-go-sdk/dskafka"
+	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 )
-
-type Producer interface {
-	Send(ctx context.Context, key string, value any) error
-	Close() error
-}
 
 type ProducerAdapter struct {
 	Producer interfaces.Producer
 }
 
-func (a *ProducerAdapter) Send(ctx context.Context, key string, value any) error {
-	return a.Producer.Send(ctx, key, value)
+func (a *ProducerAdapter) Send(ctx context.Context, topic string, value any) error {
+	return a.Producer.Send(ctx, topic, value)
 }
 
 func (a *ProducerAdapter) Close() error {
@@ -28,15 +23,15 @@ func (a *ProducerAdapter) Close() error {
 
 // KafkaProducerWrapper implements interfaces.Producer for the real Kafka producer
 type KafkaProducerWrapper struct {
-	Producer *sdkKafka.Producer
+	Producer *dskafka.Producer
 }
 
-func (w *KafkaProducerWrapper) Send(ctx context.Context, key string, value any) error {
-	event, ok := value.(sdkModels.EventJson)
+func (w *KafkaProducerWrapper) Send(ctx context.Context, topic string, value any) error {
+	event, ok := value.(sdkmodels.EventJson)
 	if !ok {
-		return fmt.Errorf("KafkaProducerWrapper: value is not models.EventJson")
+		return fmt.Errorf("KafkaProducerWrapper: value is not sdkmodels.EventJson")
 	}
-	return w.Producer.SendEvent(ctx, key, event)
+	return w.Producer.SendEvent(ctx, topic, event)
 }
 
 func (w *KafkaProducerWrapper) Close() error {

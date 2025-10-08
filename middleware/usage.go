@@ -15,7 +15,7 @@ import (
 )
 
 // UsageMiddleware returns an Echo middleware that emits usage report to Kafka.
-func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter) echo.MiddlewareFunc {
+func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			request := c.Request()
@@ -69,9 +69,9 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), event.Id.String(), event)
+			kafkaErr := producer.Send(c.Request().Context(), topic, event)
 			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send usage entry to Kafka for target %s: %v", event.Id.String(), kafkaErr)
+				logger.Error(c.Request().Context(), "Failed to send usage event to Kafka topic '%s' for event ID %s: %v", topic, event.Id.String(), kafkaErr)
 			}
 
 			return callErr

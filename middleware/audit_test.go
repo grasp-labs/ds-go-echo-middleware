@@ -26,10 +26,11 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	producer := &adapters.ProducerAdapter{
 		Producer: mock,
 	}
+	topic := "test_topic"
 
 	// Use Middleware under test
 	e.Use(middleware.RequestIDMiddleware(logger))
-	e.Use(middleware.AuditMiddleware(cfg, logger, producer))
+	e.Use(middleware.AuditMiddleware(cfg, logger, producer, topic))
 
 	// Define handler that sets userContext
 	// usually set by authentication middleware
