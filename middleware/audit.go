@@ -31,7 +31,11 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				if err != nil {
 					logger.Error(request.Context(), "Failed to read request body: %v", err)
 				} else if len(bodyBytes) > 0 {
-					payload = json.RawMessage(bodyBytes)
+					// Validate JSON by unmarshaling
+					err := json.Unmarshal(bodyBytes, &payload)
+					if err != nil {
+						logger.Error(request.Context(), "Failed to unmarshal request body: %v", err)
+					}
 				}
 				// Rewind the body for downstream handlers
 				request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
