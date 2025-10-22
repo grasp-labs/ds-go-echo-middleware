@@ -163,7 +163,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				EventType:   "login.failure", // Check this
 				EventSource: cfg.Name(),
 				Timestamp:   time.Now().UTC(),
-				Payload: &map[string]interface{}{
+				Payload: &map[string]any{
 					"subject":     "",
 					"path":        c.Path(),
 					"user_agent":  c.Request().UserAgent(),
@@ -176,7 +176,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", "login.failure", topic, event.Id.String(), kafkaErr)
 			}
 
-			return WrapErr(c, "unauthorized")
+			return echo.ErrUnauthorized
 		},
 	}), nil
 }
