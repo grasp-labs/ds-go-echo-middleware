@@ -183,5 +183,5 @@ func errorHandler(
 		logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", eventType, topic, event.Id.String(), kafkaErr)
 	}
 
-	return WrapErr(c, "forbidden")
+	return echo.ErrForbidden
 }
