@@ -66,7 +66,7 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	assert.True(t, ok, "Producer value should be an EventJson, got %T", mock.value)
 
 	// Verify EventJson structure
-	assert.Equal(t, requestID, eventJson.Id)
+	assert.Equal(t, requestID, eventJson.RequestId)
 	// EventType and EventSource appear to be empty strings in your middleware
 	// You might want to update your middleware to set these properly
 	assert.NotNil(t, eventJson.Payload)
