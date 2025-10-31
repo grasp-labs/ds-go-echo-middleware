@@ -35,12 +35,9 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			endTimestamp := time.Now().UTC()
 
 			// Parse (or generate) request ID set byt RequestID middleware
-			requestIDStr := requestctx.GetRequestID(c.Request().Context())
-			requestID, err := uuid.Parse(requestIDStr)
-			if err != nil {
-				logger.Error(c.Request().Context(), "invalid request_id from context: %v", err)
-				requestID = uuid.New()
-			}
+			requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
+			sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
+
 			tenantID, err := claims.GetTenantId()
 			if err != nil {
 				logger.Error(c.Request().Context(), "invalid tenant_id from userContext: %s", claims.Rsc)
@@ -54,7 +51,9 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			}
 
 			event := sdkmodels.EventJson{
-				Id:        requestID,
+				Id:        uuid.New(),
+				RequestId: requestID,
+				SessionId: sessionID,
 				TenantId:  tenantID,
 				OwnerId:   ownerID,
 				Timestamp: startTimestamp,

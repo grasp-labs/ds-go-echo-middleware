@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
@@ -65,7 +66,8 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			}
 
 			event := sdkmodels.EventJson{
-				Id:          requestID,
+				Id:          uuid.New(),
+				RequestId:   requestID,
 				SessionId:   sessionID,
 				TenantId:    tenantID,
 				EventType:   "audit.log",

@@ -151,12 +151,8 @@ func errorHandler(
 	}
 
 	// Parse (or generate) request ID set byt RequestID middleware
-	requestIDStr := requestctx.GetRequestID(c.Request().Context())
-	requestID, err := uuid.Parse(requestIDStr)
-	if err != nil {
-		logger.Error(c.Request().Context(), "Invalid request_id from context: %v", err)
-		requestID = uuid.New()
-	}
+	requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
+	sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
 
 	tenantID, err := claims.GetTenantId()
 	if err != nil {
@@ -164,8 +160,10 @@ func errorHandler(
 	}
 
 	event := sdkmodels.EventJson{
-		Id:          requestID,
+		Id:          uuid.New(),
 		TenantId:    tenantID,
+		RequestId:   requestID,
+		SessionId:   sessionID,
 		EventType:   eventType,
 		EventSource: "",
 		Timestamp:   time.Now().UTC(),

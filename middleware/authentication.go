@@ -114,12 +114,8 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 			c.SetRequest(c.Request().WithContext(ctx))
 
 			// Should send Login Succeded event
-			requestIDStr := requestctx.GetRequestID(c.Request().Context())
-			requestID, err := uuid.Parse(requestIDStr)
-			if err != nil {
-				logger.Error(c.Request().Context(), "Invalid request_id from context: %v", err)
-				requestID = uuid.New()
-			}
+			requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
+			sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
 
 			tenantID, err := claims.GetTenantId()
 			if err != nil {
@@ -128,8 +124,10 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 			}
 
 			event := sdkmodels.EventJson{
-				Id:          requestID,
+				Id:          uuid.New(),
 				TenantId:    tenantID,
+				RequestId:   requestID,
+				SessionId:   sessionID,
 				EventType:   "login.success", // Check this
 				EventSource: cfg.Name(),
 				Timestamp:   time.Now().UTC(),
