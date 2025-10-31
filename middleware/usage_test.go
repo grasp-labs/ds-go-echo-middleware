@@ -93,7 +93,7 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 	payloadMap := *eventJson.Payload
 
 	// Key usage fields
-	assert.Equal(t, requestID, eventJson.Id)
+	assert.Equal(t, requestID, eventJson.RequestId)
 	assert.Equal(t, cfg.ProductID(), payloadMap["product_id"])
 	assert.Equal(t, cfg.MemoryLimitMB(), payloadMap["memory_mb"])
 	assert.NotEmpty(t, payloadMap["start_time"], "Start time should be set")
