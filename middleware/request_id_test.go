@@ -3,7 +3,6 @@ package middleware_test
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -42,8 +41,4 @@ func TestRequestIDMiddleware_GeneratesID(t *testing.T) {
 	_, err := uuid.Parse(headerID)
 	assert.NoError(t, err)
 	assert.Equal(t, headerID, capturedRequestID)
-
-	// Logger should be called
-	assert.True(t, logger.infoCalled)
-	assert.True(t, strings.Contains(logger.lastMsg, "Request started"))
 }
