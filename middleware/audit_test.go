@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -87,5 +88,69 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 		payloadRaw, ok := payloadInterface.(json.RawMessage)
 		assert.True(t, ok, "Payload should be json.RawMessage")
 		assert.JSONEq(t, string(bodyBytes), string(payloadRaw))
+	}
+}
+
+func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
+	e := echo.New()
+
+	cfg := &mockConfig{name: "AuditTestService"}
+	logger := &mockLogger{}
+	mp := &mockProducer{}
+	producer := &adapters.ProducerAdapter{Producer: mp}
+	topic := "test_topic"
+
+	e.Use(middleware.RequestIDMiddleware(logger))
+	e.Use(middleware.AuditMiddleware(cfg, logger, producer, topic))
+
+	// Handler that actually reads the body (to verify it wasn't drained)
+	var seenBody []byte
+	e.PUT("/file/upload", func(c echo.Context) error {
+		// Satisfy GetTenantId(): use the same format as your JSON test
+		tenantUUID := uuid.New()
+		userCtx := NewTestUserContext("binary@user.com", tenantUUID.String()+":MockName")
+		c.Set("userContext", userCtx)
+
+		data, err := io.ReadAll(c.Request().Body)
+		if err != nil {
+			return err
+		}
+		seenBody = data
+		return c.NoContent(http.StatusOK)
+	})
+
+	// Non-JSON body
+	bin := []byte{0xde, 0xad, 0xbe, 0xef, 0x00, 0x01}
+	req := httptest.NewRequest(http.MethodPut, "/file/upload", bytes.NewReader(bin))
+	req.Header.Set(echo.HeaderContentType, "application/octet-stream")
+
+	// (optional) set a request id; your RequestID middleware can also generate one
+	req.Header.Set("X-Request-ID", uuid.New().String())
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Producer should have been called even for non-JSON
+	if !assert.True(t, mp.called, "Producer should have been called for non-JSON too") {
+		t.Fatalf("producer not called; check GetTenantId() expectations and userContext fixture")
+	}
+
+	// Downstream saw the exact bytes (middleware didn’t drain)
+	assert.Equal(t, bin, seenBody)
+
+	eventJson := mp.value.(sdkmodels.EventJson)
+	if eventJson.Payload != nil {
+		if p, ok := (*eventJson.Payload)["payload"]; ok {
+			if rm, ok := p.(json.RawMessage); ok {
+				// Accept missing or empty payload for non-JSON
+				if len(rm) != 0 {
+					t.Fatalf("payload should be empty for non-JSON requests, got: %q", string(rm))
+				}
+			} else if p != nil {
+				t.Fatalf("payload has unexpected type: %T", p)
+			}
+		}
 	}
 }
