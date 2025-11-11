@@ -19,61 +19,48 @@ import (
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
-// isJSON reports whether Content-Type looks like JSON (application/json or */*+json).
+// -------- helpers --------
+
 func isJSON(ct string) bool {
 	if ct == "" {
 		return false
 	}
-	// strip parameters: e.g., application/json; charset=utf-8
 	if i := strings.IndexByte(ct, ';'); i >= 0 {
 		ct = ct[:i]
 	}
 	ct = strings.TrimSpace(strings.ToLower(ct))
-	if ct == "application/json" {
-		return true
-	}
-	// vendor or structured: application/merge-patch+json, application/vnd.api+json, etc.
-	return strings.HasSuffix(ct, "+json")
+	return ct == "application/json" || strings.HasSuffix(ct, "+json")
 }
 
 // AuditMiddleware emits audit logs to Kafka.
-// It captures the request body ONLY if the request is JSON.
-// Binary uploads (octet-stream, multipart, etc.) are not read or validated.
+// It reads/restores the body ONLY for JSON requests on mutating methods.
 func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
-	const maxAuditJSONBytes int64 = 1 << 20 // 1 MiB cap for audit payloads
-
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			req := c.Request()
 
-			// Capture body only for mutating methods
 			var payload json.RawMessage
-			if method := req.Method; method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
-				ct := req.Header.Get("Content-Type")
-				if isJSON(ct) {
 
-					// cap read to avoid huge payloads
-					var bodyBytes []byte
-					limited := io.LimitReader(req.Body, maxAuditJSONBytes+1)
-					b, err := io.ReadAll(limited)
+			// Capture body only for mutating methods AND JSON content
+			ct := req.Header.Get(echo.HeaderContentType)
+			if method := req.Method; method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
+
+				if isJSON(ct) && req.Body != nil {
+					bodyBytes, err := io.ReadAll(req.Body) // read full JSON body
+					// Always restore the exact body for downstream, even if read failed
+					req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
 					if err != nil {
 						logger.Error(req.Context(), "Failed to read request body: %v", err)
-					} else {
-						if int64(len(b)) > maxAuditJSONBytes {
-							logger.Warning(req.Context(), "Request JSON body truncated for audit (>%d bytes)", maxAuditJSONBytes)
-							b = b[:maxAuditJSONBytes]
-						}
-						if json.Valid(b) {
-							payload = json.RawMessage(b)
-						} else if len(b) > 0 {
-							// Don’t treat non-JSON as an error; just note it.
-							logger.Info(req.Context(), "Request body is not valid JSON (content-type: %s); skipping audit payload", ct)
+					} else if len(bodyBytes) > 0 {
+						// Validate JSON
+						if json.Valid(bodyBytes) {
+							payload = json.RawMessage(bodyBytes)
+						} else {
+							logger.Warning(req.Context(), "Invalid JSON in request body")
 						}
 					}
-					// Rewind the body for downstream handlers
-					req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 				}
-				// else: non-JSON → do not read/drain; leave body intact
 			}
 
 			callErr := next(c)
@@ -83,7 +70,7 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			if !ok || claims == nil {
 				logger.Info(req.Context(), "Missing or invalid userContext.")
 				// Is usercontext is wrong (any scenario) - eject
-				return WrapErr(c, "uauthorized")
+				return echo.ErrUnauthorized
 			}
 
 			// Parse (or generate) request ID set byt RequestID middleware
