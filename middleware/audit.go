@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-
 	"net/http"
 	"strings"
 	"time"
@@ -24,56 +23,46 @@ func isJSON(ct string) bool {
 	if ct == "" {
 		return false
 	}
-	// strip parameters: e.g., application/json; charset=utf-8
 	if i := strings.IndexByte(ct, ';'); i >= 0 {
 		ct = ct[:i]
 	}
 	ct = strings.TrimSpace(strings.ToLower(ct))
-	if ct == "application/json" {
-		return true
-	}
-	// vendor or structured: application/merge-patch+json, application/vnd.api+json, etc.
-	return strings.HasSuffix(ct, "+json")
+	return ct == "application/json" || strings.HasSuffix(ct, "+json")
 }
 
 // AuditMiddleware emits audit logs to Kafka.
-// It captures the request body ONLY if the request is JSON.
-// Binary uploads (octet-stream, multipart, etc.) are not read or validated.
+// It captures the request body only for JSON content types.
 func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
-	const maxAuditJSONBytes int64 = 1 << 20 // 1 MiB cap for audit payloads
+	const maxAuditJSONBytes int64 = 1 << 20 // 1 MiB
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			req := c.Request()
 
-			// Capture body only for mutating methods
 			var payload json.RawMessage
-			if method := req.Method; method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
+			if m := req.Method; m == http.MethodPost || m == http.MethodPut || m == http.MethodPatch {
 				ct := req.Header.Get("Content-Type")
 				if isJSON(ct) {
-
-					// cap read to avoid huge payloads
-					var bodyBytes []byte
+					// Read (capped) JSON body
 					limited := io.LimitReader(req.Body, maxAuditJSONBytes+1)
 					b, err := io.ReadAll(limited)
 					if err != nil {
 						logger.Error(req.Context(), "Failed to read request body: %v", err)
 					} else {
 						if int64(len(b)) > maxAuditJSONBytes {
-							logger.Warning(req.Context(), "Request JSON body truncated for audit (>%d bytes)", maxAuditJSONBytes)
+							logger.Warning(req.Context(), "Request JSON body truncated for audit (> %d bytes)", maxAuditJSONBytes)
 							b = b[:maxAuditJSONBytes]
 						}
 						if json.Valid(b) {
 							payload = json.RawMessage(b)
 						} else if len(b) > 0 {
-							// Don’t treat non-JSON as an error; just note it.
-							logger.Info(req.Context(), "Request body is not valid JSON (content-type: %s); skipping audit payload", ct)
+							logger.Info(req.Context(), "Request body is not valid JSON (Content-Type: %s); skipping audit payload", ct)
 						}
 					}
-					// Rewind the body for downstream handlers
-					req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+					// ✅ Restore same bytes for downstream handlers
+					req.Body = io.NopCloser(bytes.NewReader(b))
 				}
-				// else: non-JSON → do not read/drain; leave body intact
+				// non-JSON bodies are untouched
 			}
 
 			callErr := next(c)
@@ -82,14 +71,10 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			claims, ok := c.Get("userContext").(*ctx.Context)
 			if !ok || claims == nil {
 				logger.Info(req.Context(), "Missing or invalid userContext.")
-				// Is usercontext is wrong (any scenario) - eject
-				return WrapErr(c, "uauthorized")
+				return WrapErr(c, "unauthorized")
 			}
 
-			// Parse (or generate) request ID set byt RequestID middleware
 			requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
-
-			// Parse (or generate) session ID set byt RequestID middleware
 			sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
 
 			tenantID, err := claims.GetTenantId()
@@ -107,21 +92,23 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				EventSource: cfg.Name(),
 				Timestamp:   time.Now().UTC(),
 				Payload: &map[string]any{
-					"jti":         claims.Jti,
-					"http_method": req.Method,
-					"resource":    deriveResource(c.Path()),
-					"endpoint":    c.Path(),
-					"full_url":    req.URL.String(),
-					"source_ip":   req.RemoteAddr,
-					"user_agent":  req.UserAgent(),
-					"payload":     payload,
-					"subject":     claims.Sub,
+					"jti":          claims.Jti,
+					"http_method":  req.Method,
+					"resource":     deriveResource(c.Path()),
+					"endpoint":     c.Path(),
+					"full_url":     req.URL.String(),
+					"source_ip":    req.RemoteAddr,
+					"user_agent":   req.UserAgent(),
+					"payload":      payload,
+					"subject":      claims.Sub,
+					"content_type": req.Header.Get("Content-Type"),
 				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), topic, event)
-			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", "audit.log", topic, event.Id.String(), kafkaErr)
+			if kafkaErr := producer.Send(c.Request().Context(), topic, event); kafkaErr != nil {
+				logger.Error(c.Request().Context(),
+					"Failed to send %s event to Kafka topic '%s' for event ID %s: %v",
+					"audit.log", topic, event.Id.String(), kafkaErr)
 			}
 
 			return callErr
