@@ -46,8 +46,6 @@ func RequestIDMiddleware(logger interfaces.Logger) echo.MiddlewareFunc {
 				res.Header().Set(headerSessionID, sessionID)
 			}
 
-			logger.Info(ctx, "Request started")
-
 			return next(c)
 		}
 	}
