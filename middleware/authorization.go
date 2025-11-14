@@ -12,17 +12,12 @@ import (
 	"github.com/labstack/echo/v4"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
+	ent "github.com/grasp-labs/ds-go-commonmodels/v2/commonmodels/entitlement"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
-
-type Entitlement struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	TenantId string `json:"tenant_id"`
-}
 
 // AuthorizationMiddleware for asserting a user is permitted
 // to perform action.
@@ -106,7 +101,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 // Function asserting if target group is one of the groups
 // user has a membership in.
 func userIsMember(ctx context.Context, logger interfaces.Logger, responseBody []byte, namesToMatch []string) bool {
-	var entitlements []Entitlement
+	var entitlements []ent.Entitlement
 
 	// Unmarshal the JSON response into a slice of ApiResponse
 	err := json.Unmarshal(responseBody, &entitlements)
