@@ -7,7 +7,7 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/grasp-labs/ds-event-stream-go-sdk v0.0.0-20250929104511-2e32688d2361
-	github.com/grasp-labs/ds-go-commonmodels/v2 v2.1.0-alpha.1
+	github.com/grasp-labs/ds-go-commonmodels/v3 v3.0.0-rc.3
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/labstack/gommon v0.4.2
 	github.com/stretchr/testify v1.10.0

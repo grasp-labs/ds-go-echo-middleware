@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	errCode "github.com/grasp-labs/ds-go-commonmodels/v2/commonmodels/enum/errors"
-	httpErr "github.com/grasp-labs/ds-go-commonmodels/v2/commonmodels/http_error"
+	errCode "github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/enum/errors"
+	httpErr "github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/http_error"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 	"github.com/labstack/echo/v4"
 )
