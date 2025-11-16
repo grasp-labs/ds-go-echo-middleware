@@ -14,9 +14,10 @@ import (
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/internal/fakes"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
 )
 
 func TestAuditMiddleware_BasicFlow(t *testing.T) {
@@ -84,7 +85,7 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	assert.Equal(t, "/api/audit/v1/", payloadMap["endpoint"])
 	assert.Equal(t, "/api/audit/v1/", payloadMap["full_url"])
 	assert.Equal(t, "user@email.com", payloadMap["subject"])
-	assert.Equal(t, cfg.Name(), eventJson.EventSource)
+	assert.Equal(t, utils.CreateServicePrincipleID(cfg), eventJson.EventSource)
 
 	// Check request body in payload - it's stored as "payload" field with json.RawMessage
 	if payloadInterface, exists := payloadMap["payload"]; exists {

@@ -4,8 +4,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
 
 const (

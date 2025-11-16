@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/internal/fakes"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
 )
 
 func mockCallable(config interfaces.Config) (string, uuid.UUID, int16) {

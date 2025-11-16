@@ -8,11 +8,12 @@ import (
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 	"github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/enum/status"
-	"github.com/grasp-labs/ds-go-echo-middleware/internal/utils"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
-	ctx "github.com/grasp-labs/ds-go-echo-middleware/middleware/claims"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
+
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
+	ctx "github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
 
 // UsageMiddleware returns an Echo middleware that emits usage report to Kafka.

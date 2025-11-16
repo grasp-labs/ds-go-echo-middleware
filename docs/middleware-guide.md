@@ -7,7 +7,7 @@ To install and use the ds-go-echo-middleware package in another Go project:
 Use the latest tagged release (e.g. v1.0.0):
 
 ```bash
-go get github.com/grasp-labs/ds-go-echo-middleware@v1.0.0
+go get github.com/grasp-labs/ds-go-echo-middleware@v2.0.0.rc-1
 ```
 
 This will:

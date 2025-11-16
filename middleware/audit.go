@@ -13,10 +13,11 @@ import (
 	"github.com/labstack/echo/v4"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
-	ctx "github.com/grasp-labs/ds-go-echo-middleware/middleware/claims"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
+	ctx "github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
 
 // -------- helpers --------
@@ -85,14 +86,21 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				return err
 			}
 
+			// Optional message from header
+			var message *string
+			if val := req.Header.Get("X-Message"); val != "" {
+				message = &val
+			}
+
 			event := sdkmodels.EventJson{
 				Id:          uuid.New(),
 				RequestId:   requestID,
 				SessionId:   sessionID,
 				TenantId:    tenantID,
 				EventType:   "audit.log",
-				EventSource: cfg.Name(),
+				EventSource: utils.CreateServicePrincipleID(cfg),
 				Timestamp:   time.Now().UTC(),
+				Message:     message,
 				Payload: &map[string]any{
 					"jti":         claims.Jti,
 					"http_method": req.Method,

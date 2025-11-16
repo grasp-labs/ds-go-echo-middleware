@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
 )
 
 // mockProducer implements interfaces.Producer
@@ -31,6 +33,7 @@ func (m *mockProducer) Close() error {
 }
 
 func TestProducerAdapter_Send(t *testing.T) {
+	cfg := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", uuid.New(), 1024*2)
 	mock := &mockProducer{}
 	adapter := &adapters.ProducerAdapter{
 		Producer: mock,
@@ -42,7 +45,7 @@ func TestProducerAdapter_Send(t *testing.T) {
 		RequestId:   uuid.New(),
 		TenantId:    uuid.New(),
 		EventType:   "unit.test.v1",
-		EventSource: "unit-test",
+		EventSource: utils.CreateServicePrincipleID(cfg),
 		Metadata:    map[string]string{"test": "unit"},
 		Timestamp:   time.Now(),
 		CreatedBy:   "unit-test",

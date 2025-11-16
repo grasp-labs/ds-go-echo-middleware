@@ -12,17 +12,13 @@ import (
 	"github.com/labstack/echo/v4"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
+	"github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/entitlement"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/internal/models"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
-
-type Entitlement struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	TenantId string `json:"tenant_id"`
-}
 
 // AuthorizationMiddleware for asserting a user is permitted
 // to perform action.
@@ -35,12 +31,12 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Get userContext from Echo context
 			userContext := c.Get("userContext")
 			if userContext == nil {
-				return errorHandler(c, http.StatusUnauthorized, "User context not found", nil, logger, producer, "authz.denied", claims, topic)
+				return errorHandler(c, &cfg, http.StatusUnauthorized, "User context not found", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
 			claims, ok := userContext.(*models.Context)
 			if !ok {
-				return errorHandler(c, http.StatusUnauthorized, "Invalid user context type", nil, logger, producer, "authz.denied", claims, topic)
+				return errorHandler(c, &cfg, http.StatusUnauthorized, "Invalid user context type", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
 			// Get token from Echo Context set by Authorization middleware
@@ -48,7 +44,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			// Safely assert the value to a string
 			authToken, ok := authorization.(string)
 			if !ok {
-				return errorHandler(c, http.StatusUnauthorized, "Failed to assert authorization as string", nil, logger, producer, "authz.denied", claims, topic)
+				return errorHandler(c, &cfg, http.StatusUnauthorized, "Failed to assert authorization as string", nil, logger, producer, "authz.denied", claims, topic)
 
 			}
 
@@ -65,26 +61,31 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			}
 
 			// Make external entitlement API call
+			startTime := time.Now().UTC()
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims, topic)
+				return errorHandler(c, &cfg, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims, topic)
 			}
 			req.Header.Set("Authorization", authToken)
 
 			client := &http.Client{Timeout: 5 * time.Second}
 			resp, err := client.Do(req)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims, topic)
+				return errorHandler(c, &cfg, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims, topic)
 			}
+
 			defer func() { _ = resp.Body.Close() }()
+
+			latency := time.Since(startTime)
+			logger.Info(ctx, "Entitlement API latency ms: %s", latency.Milliseconds())
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
-				return errorHandler(c, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims, topic)
+				return errorHandler(c, &cfg, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims, topic)
 			}
 
 			if resp.StatusCode != http.StatusOK {
-				return errorHandler(c, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims, topic)
+				return errorHandler(c, &cfg, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
 			// Cache result
@@ -94,7 +95,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			}
 
 			if !userIsMember(ctx, logger, body, roles) {
-				return errorHandler(c, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims, topic)
+				return errorHandler(c, &cfg, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
 			logger.Info(ctx, "Entitlement accepts request for user: %s", userID)
@@ -106,7 +107,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 // Function asserting if target group is one of the groups
 // user has a membership in.
 func userIsMember(ctx context.Context, logger interfaces.Logger, responseBody []byte, namesToMatch []string) bool {
-	var entitlements []Entitlement
+	var entitlements []entitlement.Entitlement
 
 	// Unmarshal the JSON response into a slice of ApiResponse
 	err := json.Unmarshal(responseBody, &entitlements)
@@ -135,8 +136,9 @@ func userIsMember(ctx context.Context, logger interfaces.Logger, responseBody []
 
 func errorHandler(
 	c echo.Context,
-	status int,
-	message string,
+	cfg *interfaces.Config,
+	status_code int,
+	errMessage string,
 	err error,
 	logger interfaces.Logger,
 	producer *adapters.ProducerAdapter,
@@ -144,19 +146,28 @@ func errorHandler(
 	claims *models.Context,
 	topic string,
 ) error {
+	req := c.Request()
+	ctx := req.Context()
+
 	if err != nil {
-		logger.Error(c.Request().Context(), "%s: %v", message, err)
+		logger.Error(ctx, "%s: %v", errMessage, err)
 	} else {
-		logger.Error(c.Request().Context(), "%s", message)
+		logger.Error(ctx, "%s", errMessage)
 	}
 
 	// Parse (or generate) request ID set byt RequestID middleware
-	requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
-	sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
+	requestID := requestctx.GetOrNewRequestUUID(ctx)
+	sessionID := requestctx.GetOrNewSessionUUID(ctx)
 
 	tenantID, err := claims.GetTenantId()
 	if err != nil {
 		tenantID = uuid.UUID{}
+	}
+
+	// Optional message from header
+	var message *string
+	if val := req.Header.Get("X-Message"); val != "" {
+		message = &val
 	}
 
 	event := sdkmodels.EventJson{
@@ -165,20 +176,22 @@ func errorHandler(
 		RequestId:   requestID,
 		SessionId:   sessionID,
 		EventType:   eventType,
-		EventSource: "",
+		EventSource: utils.CreateServicePrincipleID(*cfg),
 		Timestamp:   time.Now().UTC(),
+		Message:     message,
 		Payload: &map[string]any{
+			"status_code": status_code,
 			"subject":     claims.Sub,
-			"error":       message,
+			"error":       err.Error(),
 			"path":        c.Path(),
-			"user_agent":  c.Request().UserAgent(),
-			"remote_addr": c.Request().RemoteAddr,
+			"user_agent":  req.UserAgent(),
+			"remote_addr": req.RemoteAddr,
 		},
 	}
 
-	kafkaErr := producer.Send(c.Request().Context(), topic, event)
+	kafkaErr := producer.Send(ctx, topic, event)
 	if kafkaErr != nil {
-		logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", eventType, topic, event.Id.String(), kafkaErr)
+		logger.Error(ctx, "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", eventType, topic, event.Id.String(), kafkaErr)
 	}
 
 	return echo.ErrForbidden

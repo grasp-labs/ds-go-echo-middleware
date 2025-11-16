@@ -1,4 +1,4 @@
-module github.com/grasp-labs/ds-go-echo-middleware
+module github.com/grasp-labs/ds-go-echo-middleware/v2
 
 go 1.25.0
 

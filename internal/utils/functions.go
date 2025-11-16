@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
 )
 
 // Move to package utils

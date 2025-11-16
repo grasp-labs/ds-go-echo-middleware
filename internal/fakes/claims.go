@@ -2,7 +2,7 @@ package fakes
 
 import (
 	"github.com/google/uuid"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/claims"
 )
 
 func NewTestUserContext(sub string, rsc string) *claims.Context {

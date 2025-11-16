@@ -6,7 +6,7 @@ import (
 
 	dskafka "github.com/grasp-labs/ds-event-stream-go-sdk/dskafka"
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
 )
 
 type ProducerAdapter struct {
