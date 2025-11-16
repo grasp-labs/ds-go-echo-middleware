@@ -182,7 +182,7 @@ func errorHandler(
 		Payload: &map[string]any{
 			"status_code": status_code,
 			"subject":     claims.Sub,
-			"error":       err.Error(),
+			"error":       safeErr(err),
 			"path":        c.Path(),
 			"user_agent":  req.UserAgent(),
 			"remote_addr": req.RemoteAddr,
@@ -195,4 +195,13 @@ func errorHandler(
 	}
 
 	return echo.ErrForbidden
+}
+
+func safeErr(err error) *string {
+	var e string
+	if err != nil {
+		e = err.Error()
+		return &e
+	}
+	return nil
 }

@@ -63,10 +63,10 @@ type AppConfig struct {
 // NewAppConfig constructs a new AppConfig instance with required fields.
 func NewAppConfig(domain, serviceGroup, name, version string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm PermissionConfig) *AppConfig {
 	return &AppConfig{
-		domain: 	   domain,
+		domain:        domain,
 		serviceGroup:  serviceGroup,
 		name:          name,
-		version:	   version,
+		version:       version,
 		productID:     productID,
 		memoryLimitMB: limit,
 		apiCache:      cache,
@@ -130,7 +130,7 @@ func main() {
 		"dp",
 		"core",
 		"your-service",
-		"v1.0.0-alpha-1)",
+		"v1.0.0-alpha-1",
 		uuid.MustParse("11111111-1111-1111-1111-111111111111"),
 		1024,
 		cache,
