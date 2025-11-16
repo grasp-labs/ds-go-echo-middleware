@@ -9,13 +9,14 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/grasp-labs/ds-go-echo-middleware/internal/fakes"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware"
 	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
 )
 
 func TestRequestIDMiddleware_GeneratesID(t *testing.T) {
 	e := echo.New()
-	logger := &mockLogger{}
+	logger := &fakes.MockLogger{}
 
 	e.Use(middleware.RequestIDMiddleware(logger))
 
