@@ -13,17 +13,20 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
+
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
 )
 
 func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	e := echo.New()
 
 	// Mocks required for middleware
-	cfg := &mockConfig{name: "AuditTestService"}
-	logger := &mockLogger{}
-	mock := &mockProducer{}
+	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", uuid.New(), 1024)
+	logger := &fakes.MockLogger{}
+	mock := &fakes.MockProducer{}
 	producer := &adapters.ProducerAdapter{
 		Producer: mock,
 	}
@@ -37,7 +40,7 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	// usually set by authentication middleware
 	e.POST("/api/audit/v1/", func(c echo.Context) error {
 		resourceUUID := uuid.New()
-		userCtx := NewTestUserContext("user@email.com", resourceUUID.String()+":MockName")
+		userCtx := fakes.NewTestUserContext("user@email.com", resourceUUID.String()+":MockName")
 		c.Set("userContext", userCtx)
 		return c.JSON(http.StatusCreated, map[string]string{"status": "ok"})
 	})
@@ -59,12 +62,12 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 
 	// Assertions
 	assert.Equal(t, http.StatusCreated, rec.Code)
-	assert.True(t, mock.called, "Producer should have been called")
-	assert.NotEmpty(t, mock.key, "Audit key (request ID) should be set")
+	assert.True(t, mock.Called(), "Producer should have been called")
+	assert.NotEmpty(t, mock.Key(), "Audit key (request ID) should be set")
 
 	// Check that the value is EventJson (not AuditEntry directly)
-	eventJson, ok := mock.value.(sdkmodels.EventJson)
-	assert.True(t, ok, "Producer value should be an EventJson, got %T", mock.value)
+	eventJson, ok := mock.Value().(sdkmodels.EventJson)
+	assert.True(t, ok, "Producer value should be an EventJson, got %T", mock.Value())
 
 	// Verify EventJson structure
 	assert.Equal(t, requestID, eventJson.RequestId)
@@ -76,12 +79,13 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	assert.NotNil(t, eventJson.Payload, "Payload should not be nil")
 
 	payloadMap := *eventJson.Payload
+	assert.NotNil(t, payloadMap)
 	assert.Equal(t, "POST", payloadMap["http_method"])
 	assert.Equal(t, "api", payloadMap["resource"])
 	assert.Equal(t, "/api/audit/v1/", payloadMap["endpoint"])
 	assert.Equal(t, "/api/audit/v1/", payloadMap["full_url"])
 	assert.Equal(t, "user@email.com", payloadMap["subject"])
-	assert.Equal(t, cfg.Name(), eventJson.EventSource)
+	assert.Equal(t, utils.CreateServicePrincipleID(cfg), eventJson.EventSource)
 
 	// Check request body in payload - it's stored as "payload" field with json.RawMessage
 	if payloadInterface, exists := payloadMap["payload"]; exists {
@@ -94,9 +98,9 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
 	e := echo.New()
 
-	cfg := &mockConfig{name: "AuditTestService"}
-	logger := &mockLogger{}
-	mp := &mockProducer{}
+	cfg := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", uuid.New(), 1024*2)
+	logger := &fakes.MockLogger{}
+	mp := &fakes.MockProducer{}
 	producer := &adapters.ProducerAdapter{Producer: mp}
 	topic := "test_topic"
 
@@ -108,7 +112,7 @@ func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
 	e.PUT("/file/upload", func(c echo.Context) error {
 		// Satisfy GetTenantId(): use the same format as your JSON test
 		tenantUUID := uuid.New()
-		userCtx := NewTestUserContext("binary@user.com", tenantUUID.String()+":MockName")
+		userCtx := fakes.NewTestUserContext("binary@user.com", tenantUUID.String()+":MockName")
 		c.Set("userContext", userCtx)
 
 		data, err := io.ReadAll(c.Request().Body)
@@ -133,14 +137,14 @@ func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	// Producer should have been called even for non-JSON
-	if !assert.True(t, mp.called, "Producer should have been called for non-JSON too") {
+	if !assert.True(t, mp.Called(), "Producer should have been called for non-JSON too") {
 		t.Fatalf("producer not called; check GetTenantId() expectations and userContext fixture")
 	}
 
 	// Downstream saw the exact bytes (middleware didn’t drain)
 	assert.Equal(t, bin, seenBody)
 
-	eventJson := mp.value.(sdkmodels.EventJson)
+	eventJson := mp.Value().(sdkmodels.EventJson)
 	if eventJson.Payload != nil {
 		if p, ok := (*eventJson.Payload)["payload"]; ok {
 			if rm, ok := p.(json.RawMessage); ok {

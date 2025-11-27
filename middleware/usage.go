@@ -7,11 +7,13 @@ import (
 	"github.com/labstack/echo/v4"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
-	ctx "github.com/grasp-labs/ds-go-echo-middleware/middleware/claims"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
+	"github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/enum/status"
+
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
+	ctx "github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
 
 // UsageMiddleware returns an Echo middleware that emits usage report to Kafka.
@@ -50,19 +52,27 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				ownerID = &val
 			}
 
+			// Optional message from header
+			var message *string
+			if val := request.Header.Get("X-Message"); val != "" {
+				message = &val
+			}
+
 			event := sdkmodels.EventJson{
-				Id:        uuid.New(),
-				RequestId: requestID,
-				SessionId: sessionID,
-				TenantId:  tenantID,
-				OwnerId:   ownerID,
-				Timestamp: startTimestamp,
+				Id:          uuid.New(),
+				RequestId:   requestID,
+				SessionId:   sessionID,
+				TenantId:    tenantID,
+				OwnerId:     ownerID,
+				Timestamp:   startTimestamp,
+				EventSource: utils.CreateServicePrincipleID(cfg),
+				Message:     message,
 				Payload: &map[string]any{
 					"product_id":   cfg.ProductID(),
 					"memory_mb":    cfg.MemoryLimitMB(),
 					"start_time":   startTimestamp,
 					"end_time":     endTimestamp,
-					"status":       models.Draft,
+					"status":       status.Draft,
 					"user_id":      claims.Sub,
 					"service_name": cfg.Name(),
 				},

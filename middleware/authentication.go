@@ -16,10 +16,11 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/internal/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/internal/models"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
 
 // ParseRSAPublicKey parses a PEM-encoded RSA public key and handles PKCS8 or PKCS1 formats
@@ -123,14 +124,21 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				return false, WrapErr(c, "unauthorized")
 			}
 
+			// Optional message from header
+			var message *string
+			if val := c.Request().Header.Get("X-Message"); val != "" {
+				message = &val
+			}
+
 			event := sdkmodels.EventJson{
 				Id:          uuid.New(),
 				TenantId:    tenantID,
 				RequestId:   requestID,
 				SessionId:   sessionID,
 				EventType:   "login.success", // Check this
-				EventSource: cfg.Name(),
+				EventSource: utils.CreateServicePrincipleID(cfg),
 				Timestamp:   time.Now().UTC(),
+				Message:     message,
 				Payload: &map[string]any{
 					"subject":     claims.Sub,
 					"path":        c.Path(),
@@ -159,7 +167,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				Id:          requestID,
 				TenantId:    uuid.UUID{},
 				EventType:   "login.failure", // Check this
-				EventSource: cfg.Name(),
+				EventSource: utils.CreateServicePrincipleID(cfg),
 				Timestamp:   time.Now().UTC(),
 				Payload: &map[string]any{
 					"subject":     "",

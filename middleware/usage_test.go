@@ -13,21 +13,18 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
 )
 
 func TestUsageMiddleware_BasicFlow(t *testing.T) {
 	e := echo.New()
 
 	// Mocks required for middleware
-	cfg := &mockConfig{
-		name:          "UsageTestService",
-		productID:     uuid.MustParse("06b6b947-26a6-4e66-95e5-9ade49e1ea5c"),
-		memoryLimitMB: 512,
-	}
-	logger := &mockLogger{}
-	mock := &mockProducer{}
+	cfg := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", uuid.New(), 1024*2)
+	logger := &fakes.MockLogger{}
+	mock := &fakes.MockProducer{}
 	producer := &adapters.ProducerAdapter{
 		Producer: mock,
 	}
@@ -40,7 +37,7 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 	// Define handler that sets userContext
 	e.POST("/api/usage/v1/", func(c echo.Context) error {
 		resourceUUID := uuid.New()
-		userCtx := NewTestUserContext("user@email.com", resourceUUID.String()+":MockName")
+		userCtx := fakes.NewTestUserContext("user@email.com", resourceUUID.String()+":MockName")
 		c.Set("userContext", userCtx)
 
 		// Simulate some response data to measure response size
@@ -76,13 +73,13 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 
 	// Assertions
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.True(t, mock.called, "Producer should have been called")
-	assert.NotEmpty(t, mock.key, "Usage key should be set")
+	assert.True(t, mock.Called(), "Producer should have been called")
+	assert.NotEmpty(t, mock.Key(), "Usage key should be set")
 
 	// Check that the value is sdkmodels.EventJson
-	eventJson, ok := mock.value.(sdkmodels.EventJson)
+	eventJson, ok := mock.Value().(sdkmodels.EventJson)
 	if !ok {
-		t.Fatalf("Producer value should be models.EventJson, got %T. Value: %+v", mock.value, mock.value)
+		t.Fatalf("Producer value should be models.EventJson, got %T. Value: %+v", mock.Value(), mock.Value())
 	}
 
 	// Verify basic EventJson structure
@@ -94,6 +91,7 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 
 	// Key usage fields
 	assert.Equal(t, requestID, eventJson.RequestId)
+	assert.NotNil(t, payloadMap)
 	assert.Equal(t, cfg.ProductID(), payloadMap["product_id"])
 	assert.Equal(t, cfg.MemoryLimitMB(), payloadMap["memory_mb"])
 	assert.NotEmpty(t, payloadMap["start_time"], "Start time should be set")
@@ -105,8 +103,8 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 	// ProductID type and value
 	productIdUUID, ok := payloadMap["product_id"].(uuid.UUID)
 	assert.True(t, ok, "Product ID should be uuid.UUID")
-	expectedUUID := uuid.MustParse("06b6b947-26a6-4e66-95e5-9ade49e1ea5c")
-	assert.Equal(t, expectedUUID, productIdUUID)
+
+	assert.Equal(t, cfg.ProductID(), productIdUUID)
 
 	// MemoryMB type and value
 	memoryMbInt, ok := payloadMap["memory_mb"].(int16)

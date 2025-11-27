@@ -11,6 +11,9 @@ The following is the interface you need to satisfy:
 ```go
 type Config interface {
 	MemoryLimitMB() int16
+	Domain() string       // New
+	ServiceGroup() string // New
+	Version() string
 	Name() string
 	ProductID() uuid.UUID
 	APICache() *bigcache.BigCache
@@ -47,7 +50,10 @@ func (p *PermissionConfig) Url() string { return p.url }
 
 // AppConfig implements the Config interface and holds service configuration.
 type AppConfig struct {
+	domain		  string
+	serviceGroup  string
 	name          string
+	version		  string
 	productID     uuid.UUID
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
@@ -55,9 +61,12 @@ type AppConfig struct {
 }
 
 // NewAppConfig constructs a new AppConfig instance with required fields.
-func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm PermissionConfig) *AppConfig {
+func NewAppConfig(domain, serviceGroup, name, version string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm PermissionConfig) *AppConfig {
 	return &AppConfig{
+		domain:        domain,
+		serviceGroup:  serviceGroup,
 		name:          name,
+		version:       version,
 		productID:     productID,
 		memoryLimitMB: limit,
 		apiCache:      cache,
@@ -66,9 +75,20 @@ func NewAppConfig(name string, productID uuid.UUID, limit int16, cache *bigcache
 }
 
 // Interface method implementations:
+func (c *AppConfig) Domain() string {
+	return c.domain
+}
+
+func (c *AppConfig) ServiceGroup() string {
+	return c.serviceGroup
+}
 
 func (c *AppConfig) Name() string {
 	return c.name
+}
+
+func (c *AppConfig) Version() string {
+	return c.version
 }
 
 func (c *AppConfig) ProductID() uuid.UUID {
@@ -107,7 +127,10 @@ func main() {
 	cache, _ := bigcache.New(context.Background(), bigcache.DefaultConfig(10 * time.Minute))
 
 	cfg := config.NewAppConfig(
+		"dp",
+		"core",
 		"your-service",
+		"v1.0.0-alpha-1",
 		uuid.MustParse("11111111-1111-1111-1111-111111111111"),
 		1024,
 		cache,

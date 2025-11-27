@@ -1,10 +1,12 @@
 package middleware
 
 import (
+	"github.com/labstack/echo/v4"
+
 	errCode "github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/enum/errors"
 	httpErr "github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/http_error"
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
-	"github.com/labstack/echo/v4"
+
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
 
 const DefaultLocal string = "en"

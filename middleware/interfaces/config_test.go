@@ -3,50 +3,22 @@ package interfaces_test
 import (
 	"testing"
 
-	"github.com/allegro/bigcache/v3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
 )
-
-type mockConfig struct {
-	name          string
-	productID     uuid.UUID
-	memoryLimitMB int16
-	apiCache      *bigcache.BigCache
-}
-
-// Implement the interface methods
-func (c *mockConfig) ProductID() uuid.UUID {
-	return c.productID
-}
-
-func (c *mockConfig) Name() string {
-	return c.name
-}
-
-func (c *mockConfig) MemoryLimitMB() int16 {
-	return c.memoryLimitMB
-}
-
-func (c *mockConfig) APICache() *bigcache.BigCache {
-	return c.apiCache
-}
 
 func mockCallable(config interfaces.Config) (string, uuid.UUID, int16) {
 	return config.Name(), config.ProductID(), config.MemoryLimitMB()
 }
 
 func TestConfig_CallableAttributes(t *testing.T) {
-	c := mockConfig{
-		name:          "test",
-		productID:     uuid.New(),
-		memoryLimitMB: 1024,
-	}
+	c := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", uuid.New(), 1024*2)
 
 	// Assign to interface
-	var cfg interfaces.Config = &c
+	var cfg interfaces.Config = c
 
 	name, productID, memoryLimitMB := mockCallable(cfg)
 	assert.Equal(t, name, c.Name())
