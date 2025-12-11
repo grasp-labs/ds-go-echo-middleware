@@ -68,5 +68,3 @@ jobs:
           name: Release ${{ steps.meta.outputs.VERSION }}
           draft: false
           prerelease: false
-          files: |
-            build/${{ env.SERVICE_NAME }}
