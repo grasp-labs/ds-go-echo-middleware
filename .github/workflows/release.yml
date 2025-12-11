@@ -1,3 +1,9 @@
+# This file is used to create a GitHub release and push artifact reference to ds-coordination storage.
+# It is designed to be triggered by a push event that creates a new tag matching the pattern 'v*.*.*'.
+# The template includes steps for checking out the code, configuring AWS credentials,
+# pushing release information to DynamoDB, and creating a GitHub release.
+# DS-Coordination repository own the templates for building and releasing Go, and other, applications.
+
 name: Push Release to DynamoDB and Create GitHub Release
 
 on:
