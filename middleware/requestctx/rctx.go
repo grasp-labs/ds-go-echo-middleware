@@ -19,17 +19,13 @@ type RequestCtx struct {
 func New(c context.Context, locale string) RequestCtx {
 	claims := GetUserContext(c)
 
-	var (
-		tenantID uuid.UUID = uuid.Nil
-		err      error
-	)
+	var tenantID = uuid.Nil
 
 	if claims != nil {
+		var err error
 		tenantID, err = claims.GetTenantId()
 
 		if err != nil {
-			tenantID = uuid.Nil
-		} else {
 			tenantID = uuid.Nil
 		}
 	}
