@@ -65,6 +65,7 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				TenantId:    tenantID,
 				OwnerId:     ownerID,
 				Timestamp:   startTimestamp,
+				EventType:   "usage.report",
 				EventSource: utils.CreateServicePrincipleID(cfg),
 				Message:     message,
 				Payload: &map[string]any{
