@@ -78,8 +78,11 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	// Extract payload and verify audit-specific fields
 	assert.NotNil(t, eventJson.Payload, "Payload should not be nil")
 
-	payloadMap := *eventJson.Payload
-	assert.NotNil(t, payloadMap)
+	payloadPtr, ok := eventJson.Payload.(*map[string]any)
+	assert.True(t, ok, "Payload should be a map[string]any")
+	assert.NotNil(t, payloadPtr)
+
+	payloadMap := *payloadPtr
 	assert.Equal(t, "POST", payloadMap["http_method"])
 	assert.Equal(t, "api", payloadMap["resource"])
 	assert.Equal(t, "/api/audit/v1/", payloadMap["endpoint"])
@@ -146,14 +149,17 @@ func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
 
 	eventJson := mp.Value().(sdkmodels.EventJson)
 	if eventJson.Payload != nil {
-		if p, ok := (*eventJson.Payload)["payload"]; ok {
-			if rm, ok := p.(json.RawMessage); ok {
-				// Accept missing or empty payload for non-JSON
-				if len(rm) != 0 {
-					t.Fatalf("payload should be empty for non-JSON requests, got: %q", string(rm))
+		if payloadPtr, ok := eventJson.Payload.(*map[string]any); ok {
+			payloadMap := *payloadPtr
+			if p, ok := payloadMap["payload"]; ok {
+				if rm, ok := p.(json.RawMessage); ok {
+					// Accept missing or empty payload for non-JSON
+					if len(rm) != 0 {
+						t.Fatalf("payload should be empty for non-JSON requests, got: %q", string(rm))
+					}
+				} else if p != nil {
+					t.Fatalf("payload has unexpected type: %T", p)
 				}
-			} else if p != nil {
-				t.Fatalf("payload has unexpected type: %T", p)
 			}
 		}
 	}
