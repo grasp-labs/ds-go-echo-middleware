@@ -33,6 +33,17 @@ func isJSON(ct string) bool {
 	return ct == "application/json" || strings.HasSuffix(ct, "+json")
 }
 
+// responseWriter wraps echo.Response to capture the response body
+type responseWriter struct {
+	echo.Response
+	body *bytes.Buffer
+}
+
+func (w *responseWriter) Write(b []byte) (int, error) {
+	w.body.Write(b)
+	return w.Writer.Write(b)
+}
+
 // AuditMiddleware emits audit logs to Kafka.
 // It reads/restores the body ONLY for JSON requests on mutating methods.
 func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
@@ -64,7 +75,27 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				}
 			}
 
+			// Wrap response writer to capture response body
+			resBody := new(bytes.Buffer)
+			mw := &responseWriter{
+				Response: *c.Response(),
+				body:     resBody,
+			}
+			c.Response().Writer = mw
+
 			callErr := next(c)
+
+			// Capture response status code
+			statusCode := c.Response().Status
+
+			// Capture response body as JSON only for error responses (>= 400)
+			var responsePayload json.RawMessage
+			if statusCode >= 400 && resBody.Len() > 0 {
+				responseBytes := resBody.Bytes()
+				if json.Valid(responseBytes) {
+					responsePayload = json.RawMessage(responseBytes)
+				}
+			}
 
 			// Resolve user context
 			claims, ok := c.Get("userContext").(*ctx.Context)
@@ -102,15 +133,17 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				Timestamp:   time.Now().UTC(),
 				Message:     message,
 				Payload: &map[string]any{
-					"jti":         claims.Jti,
-					"http_method": req.Method,
-					"resource":    deriveResource(c.Path()),
-					"endpoint":    c.Path(),
-					"full_url":    req.URL.String(),
-					"source_ip":   req.RemoteAddr,
-					"user_agent":  req.UserAgent(),
-					"payload":     payload,
-					"subject":     claims.Sub,
+					"jti":              claims.Jti,
+					"http_method":      req.Method,
+					"resource":         deriveResource(c.Path()),
+					"endpoint":         c.Path(),
+					"full_url":         req.URL.String(),
+					"source_ip":        req.RemoteAddr,
+					"user_agent":       req.UserAgent(),
+					"payload":          payload,
+					"subject":          claims.Sub,
+					"status_code":      statusCode,
+					"response_payload": responsePayload,
 				},
 			}
 
