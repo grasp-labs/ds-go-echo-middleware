@@ -204,8 +204,8 @@ func TestAuditMiddleware_SuccessResponse_NoResponseBody(t *testing.T) {
 	assert.NotNil(t, eventJson.Payload)
 
 	payloadPtr, ok := eventJson.Payload.(*map[string]any)
-	payloadMap := *payloadPtr
 	assert.True(t, ok, "Payload should be a map[string]any")
+	payloadMap := *payloadPtr
 
 	// Verify audit fields
 	assert.Equal(t, "POST", payloadMap["http_method"])
