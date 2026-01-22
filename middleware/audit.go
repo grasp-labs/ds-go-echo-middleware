@@ -100,7 +100,6 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			// Resolve user context
 			claims, ok := c.Get("userContext").(*ctx.Context)
 			if !ok || claims == nil {
-				logger.Info(req.Context(), "Missing or invalid userContext.")
 				// Is usercontext is wrong (any scenario) - eject
 				return echo.ErrUnauthorized
 			}
