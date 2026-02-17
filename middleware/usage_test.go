@@ -87,11 +87,13 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 	assert.NotNil(t, eventJson.Payload, "Payload should not be nil")
 
 	// Extract Payload map for detailed checks
-	payloadMap := *eventJson.Payload
+	payloadPtr, ok := eventJson.Payload.(*map[string]any)
+	assert.True(t, ok, "Payload should be a map[string]any")
 
 	// Key usage fields
 	assert.Equal(t, requestID, eventJson.RequestId)
-	assert.NotNil(t, payloadMap)
+	assert.NotNil(t, payloadPtr)
+	payloadMap := *payloadPtr
 	assert.Equal(t, cfg.ProductID(), payloadMap["product_id"])
 	assert.Equal(t, cfg.MemoryLimitMB(), payloadMap["memory_mb"])
 	assert.NotEmpty(t, payloadMap["start_time"], "Start time should be set")
