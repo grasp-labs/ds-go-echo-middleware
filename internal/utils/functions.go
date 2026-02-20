@@ -24,6 +24,8 @@ func CreateServicePrincipleID(cfg interfaces.Config) string {
 	return fmt.Sprintf("%s.%s.%s.%s", cfg.Domain(), cfg.ServiceGroup(), cfg.Name(), mv)
 }
 
+// ParseRequestID parses a string into a UUID.
+// If the string is empty or not a valid UUID, it returns uuid.Nil and an error.
 func ParseRequestID(raw string) (uuid.UUID, error) {
 	if raw == "" {
 		return uuid.Nil, errors.New("request ID missing")

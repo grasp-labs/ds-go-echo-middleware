@@ -60,23 +60,20 @@ func TestContext_GetTenantName(t *testing.T) {
 		name    string
 		context internal.Context
 		want    string
-		wantErr bool
 	}{
 		{
 			name: "valid tenant name",
 			context: internal.Context{
 				Rsc: uuid.New().String() + ":" + validTenantName,
 			},
-			want:    validTenantName,
-			wantErr: false,
+			want: validTenantName,
 		},
 		{
 			name: "empty tenant name",
 			context: internal.Context{
 				Rsc: uuid.New().String() + ":" + invalidTenantName,
 			},
-			want:    invalidTenantName,
-			wantErr: true,
+			want: invalidTenantName,
 		},
 	}
 
