@@ -21,6 +21,7 @@ func SetRequestID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, requestIDKey, id)
 }
 
+// GetOrNewRequestUUID returns the request ID as uuid.UUID, generating a new one if missing/invalid.
 func GetOrNewRequestUUID(ctx context.Context) uuid.UUID {
 	if v, ok := ctx.Value(requestIDKey).(string); ok {
 		if u, err := uuid.Parse(v); err == nil {
