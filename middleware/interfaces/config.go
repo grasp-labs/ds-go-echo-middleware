@@ -14,5 +14,4 @@ type Config interface {
 	Name() string
 	ProductID() uuid.UUID
 	APICache() *bigcache.BigCache
-	Language() string
 }

@@ -24,12 +24,11 @@ type RequestCtx struct {
 	Err       error
 }
 
-// New creates a new RequestCtx from the given context and locale.
+// New creates a new RequestCtx from the given Echo context and configuration.
 //
-// It extracts the user claims, tenant ID, and request ID from the context.
-//
-// If the tenant ID is missing or invalid, it defaults to uuid.Nil.
-// If the request ID is missing or invalid, a new UUID is generated.
+// It extracts the user claims, tenant ID, and request ID from the request context,
+// and determines the locale from the Echo context (if set) or falls back to the
+// default language provided by the configuration.
 func New(c echo.Context, cfg interfaces.Config) RequestCtx {
 	ctx := c.Request().Context()
 	ctxClaims := GetUserContext(ctx)
@@ -48,8 +47,11 @@ func New(c echo.Context, cfg interfaces.Config) RequestCtx {
 	requestID := GetOrNewRequestUUID(ctx)
 
 	// Get locale from echo context (set by LocaleMiddleware for this request)
-	// or fallback to service default from config
-	locale := cfg.Language()
+	// or fallback to config's Language() method if implemented, or "en" as final default
+	locale := "en"
+	if langProvider, ok := cfg.(interface{ Language() string }); ok {
+		locale = langProvider.Language()
+	}
 	if v, ok := c.Get("locale").(string); ok && v != "" {
 		locale = v
 	}
