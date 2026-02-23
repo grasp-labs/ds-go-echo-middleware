@@ -164,6 +164,8 @@ func TestUsageMiddleware_MissingUserContext(t *testing.T) {
 	// Execute
 	e.ServeHTTP(rec, req)
 
-	// Assertions - verify producer was not called when user context is missing
+	// Assertions - when user context is missing, the middleware logs a warning
+	// but still allows the request to proceed (doesn't send to producer)
+	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.False(t, mock.Called(), "Producer should not have been called when user context is missing")
 }
