@@ -3,6 +3,7 @@ package middleware
 import (
 	"strings"
 
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/text/language"
 )
@@ -38,12 +39,9 @@ func LocaleFromHeader(c echo.Context, def string) string {
 
 // Locale is a helper function that safely parse
 // inerface to string, returning def (default) on err
+
 func Locale(c echo.Context, def string) string {
-	v := c.Get("locale")
-	if s, ok := v.(string); ok && s != "" {
-		return s
-	}
-	return def
+	return utils.Locale(c, def)
 }
 
 // LocaleMiddleware to

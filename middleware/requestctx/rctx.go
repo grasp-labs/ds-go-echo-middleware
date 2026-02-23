@@ -4,7 +4,10 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
+
 	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
 )
 
 // RequestCtx is a struct that holds information about the current request context.
@@ -13,6 +16,7 @@ import (
 // and any error that occurred during processing.
 type RequestCtx struct {
 	Ctx       context.Context
+	C         echo.Context
 	RequestID uuid.UUID
 	Locale    string
 	Claims    *claims.Context
@@ -26,11 +30,12 @@ type RequestCtx struct {
 //
 // If any of these values are missing or invalid,
 // it sets them to default values (e.g., uuid.Nil for tenant ID and request ID).
-func New(c context.Context, locale string) RequestCtx {
-	claims := GetUserContext(c)
+func (r *RequestCtx) New(c echo.Context, cfg interfaces.Config) RequestCtx {
+	ctx := c.Request().Context()
+	claims := GetUserContext(ctx)
 
+	// Extract tenant ID from claims if available, otherwise set to uuid.Nil
 	var tenantID = uuid.Nil
-
 	if claims != nil {
 		var err error
 		tenantID, err = claims.GetTenantId()
@@ -40,17 +45,26 @@ func New(c context.Context, locale string) RequestCtx {
 		}
 	}
 
-	requestID, err := uuid.Parse(GetRequestID(c))
+	requestID, err := uuid.Parse(GetRequestID(ctx))
 	if err != nil {
 		requestID = uuid.New()
 	}
 
+	// Get locale from echo context (set by LocaleMiddleware) or fallback to default from config
+	locale := cfg.Language()
+	if v := c.Get("locale"); v != nil {
+		if s, ok := v.(string); ok && s != "" {
+			locale = s
+		}
+	}
+
 	return RequestCtx{
-		Ctx:       c,
+		Ctx:       ctx,
+		C:         c,
+		RequestID: requestID,
 		Locale:    locale,
 		Claims:    claims,
 		TenantID:  tenantID,
-		RequestID: requestID,
 		Err:       err,
 	}
 }

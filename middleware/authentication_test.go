@@ -17,7 +17,7 @@ import (
 
 func TestAuthX(t *testing.T) {
 	e := echo.New()
-	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", uuid.New(), 1024)
+	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", "en", uuid.New(), 1024)
 	logger := &fakes.MockLogger{}
 	mockProducer := fakes.MockProducer{}
 	mockProducerAdapter := &adapters.ProducerAdapter{

@@ -13,6 +13,7 @@ type MockConfig struct {
 	productID     uuid.UUID
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
+	locale        string
 }
 
 // Implement the interface methods
@@ -44,7 +45,11 @@ func (c *MockConfig) Version() string {
 	return c.version
 }
 
-func NewConfig(d, sg, n, v string, pid uuid.UUID, mb int16) *MockConfig {
+func (c *MockConfig) Language() string {
+	return c.locale
+}
+
+func NewConfig(d, sg, n, v, lc string, pid uuid.UUID, mb int16) *MockConfig {
 	return &MockConfig{
 		domain:        d,
 		serviceGroup:  sg,
@@ -52,5 +57,6 @@ func NewConfig(d, sg, n, v string, pid uuid.UUID, mb int16) *MockConfig {
 		version:       v,
 		productID:     pid,
 		memoryLimitMB: mb,
+		locale:        lc,
 	}
 }

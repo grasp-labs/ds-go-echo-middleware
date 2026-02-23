@@ -33,7 +33,7 @@ func (m *mockProducer) Close() error {
 }
 
 func TestProducerAdapter_Send(t *testing.T) {
-	cfg := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", uuid.New(), 1024*2)
+	cfg := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", "en", uuid.New(), 1024*2)
 	mock := &mockProducer{}
 	adapter := &adapters.ProducerAdapter{
 		Producer: mock,
