@@ -31,7 +31,7 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			if !ok || claims == nil {
 				logger.Error(request.Context(), "Missing or invalid userContext")
 				// Is usercontext is wrong (any scenario) - eject
-				return WrapErr(c, "uauthorized")
+				return WrapErr(c, "unauthorized")
 			}
 
 			endTimestamp := time.Now().UTC()
