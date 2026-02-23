@@ -30,7 +30,7 @@ type RequestCtx struct {
 //
 // If the tenant ID is missing or invalid, it defaults to uuid.Nil.
 // If the request ID is missing or invalid, a new UUID is generated.
-func (r *RequestCtx) New(c echo.Context, cfg interfaces.Config) RequestCtx {
+func New(c echo.Context, cfg interfaces.Config) RequestCtx {
 	ctx := c.Request().Context()
 	ctxClaims := GetUserContext(ctx)
 
@@ -47,12 +47,11 @@ func (r *RequestCtx) New(c echo.Context, cfg interfaces.Config) RequestCtx {
 
 	requestID := GetOrNewRequestUUID(ctx)
 
-	// Get locale from echo context (set by LocaleMiddleware) or fallback to default from config
+	// Get locale from echo context (set by LocaleMiddleware for this request)
+	// or fallback to service default from config
 	locale := cfg.Language()
-	if v := c.Get("locale"); v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			locale = s
-		}
+	if v, ok := c.Get("locale").(string); ok && v != "" {
+		locale = v
 	}
 
 	return RequestCtx{
