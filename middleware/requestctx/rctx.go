@@ -24,6 +24,12 @@ type RequestCtx struct {
 	Err       error
 }
 
+// Deprecated: Use New() instead. This method is kept for backward compatibility and will be removed in future versions.
+// New creates a new RequestCtx from the given Echo context and configuration.
+func (r RequestCtx) New(c echo.Context, cfg interfaces.Config) RequestCtx {
+	return New(c, cfg)
+}
+
 // New creates a new RequestCtx from the given Echo context and configuration.
 //
 // It extracts the user claims, tenant ID, and request ID from the request context,
