@@ -26,29 +26,26 @@ type RequestCtx struct {
 
 // New creates a new RequestCtx from the given context and locale.
 //
-//	It extracts the user claims, tenant ID, and request ID from the context.
+// It extracts the user claims, tenant ID, and request ID from the context.
 //
-// If any of these values are missing or invalid,
-// it sets them to default values (e.g., uuid.Nil for tenant ID and request ID).
+// If the tenant ID is missing or invalid, it defaults to uuid.Nil.
+// If the request ID is missing or invalid, a new UUID is generated.
 func (r *RequestCtx) New(c echo.Context, cfg interfaces.Config) RequestCtx {
 	ctx := c.Request().Context()
-	claims := GetUserContext(ctx)
+	ctxClaims := GetUserContext(ctx)
 
 	// Extract tenant ID from claims if available, otherwise set to uuid.Nil
 	var tenantID = uuid.Nil
-	if claims != nil {
-		var err error
-		tenantID, err = claims.GetTenantId()
+	var err error
+	if ctxClaims != nil {
+		tenantID, err = ctxClaims.GetTenantId()
 
 		if err != nil {
 			tenantID = uuid.Nil
 		}
 	}
 
-	requestID, err := uuid.Parse(GetRequestID(ctx))
-	if err != nil {
-		requestID = uuid.New()
-	}
+	requestID := GetOrNewRequestUUID(ctx)
 
 	// Get locale from echo context (set by LocaleMiddleware) or fallback to default from config
 	locale := cfg.Language()
@@ -63,7 +60,7 @@ func (r *RequestCtx) New(c echo.Context, cfg interfaces.Config) RequestCtx {
 		C:         c,
 		RequestID: requestID,
 		Locale:    locale,
-		Claims:    claims,
+		Claims:    ctxClaims,
 		TenantID:  tenantID,
 		Err:       err,
 	}
