@@ -128,3 +128,42 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 	assert.NotNil(t, eventJson.OwnerId, "Owner ID should not be nil")
 	assert.Equal(t, "owner-123", *eventJson.OwnerId)
 }
+
+func TestUsageMiddleware_MissingUserContext(t *testing.T) {
+	e := echo.New()
+
+	// Mocks required for middleware
+	cfg := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", uuid.New(), 1024*2)
+	logger := &fakes.MockLogger{}
+	mock := &fakes.MockProducer{}
+	producer := &adapters.ProducerAdapter{
+		Producer: mock,
+	}
+	topic := "test_topic"
+
+	// Use Middleware under test
+	e.Use(middleware.RequestIDMiddleware(logger))
+	e.Use(middleware.UsageMiddleware(cfg, logger, producer, topic))
+
+	// Define handler that does NOT set userContext
+	e.POST("/api/usage/v1/", func(c echo.Context) error {
+		// Don't set userContext
+		responseData := map[string]interface{}{
+			"status": "success",
+		}
+		return c.JSON(http.StatusOK, responseData)
+	})
+
+	// Prepare request
+	requestID := uuid.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/usage/v1/", nil)
+	req.Header.Set("X-Request-ID", requestID.String())
+
+	rec := httptest.NewRecorder()
+
+	// Execute
+	e.ServeHTTP(rec, req)
+
+	// Assertions - verify producer was not called when user context is missing
+	assert.False(t, mock.Called(), "Producer should not have been called when user context is missing")
+}
