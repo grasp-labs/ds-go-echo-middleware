@@ -30,13 +30,13 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 			claims, ok := c.Get("userContext").(*ctx.Context)
 			if !ok || claims == nil {
 				logger.Error(request.Context(), "Missing or invalid userContext")
-				// Is usercontext is wrong (any scenario) - eject
-				return WrapErr(c, "uauthorized")
+				// If usercontext is invalid (any scenario) - eject
+				return WrapErr(c, "unauthorized")
 			}
 
 			endTimestamp := time.Now().UTC()
 
-			// Parse (or generate) request ID set byt RequestID middleware
+			// Parse (or generate) request ID set by RequestID middleware
 			requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
 			sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
 
