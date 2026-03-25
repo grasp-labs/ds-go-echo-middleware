@@ -6,6 +6,9 @@
 
 name: Push Release to DynamoDB and Create GitHub Release
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
