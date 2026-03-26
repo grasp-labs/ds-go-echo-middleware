@@ -24,7 +24,7 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 	e := echo.New()
 
 	// Mocks required for middleware
-	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", uuid.New(), 1024)
+	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", "en", uuid.New(), 1024)
 	logger := &fakes.MockLogger{}
 	mock := &fakes.MockProducer{}
 	producer := &adapters.ProducerAdapter{
@@ -101,7 +101,7 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
 	e := echo.New()
 
-	cfg := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", uuid.New(), 1024*2)
+	cfg := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", "en", uuid.New(), 1024*2)
 	logger := &fakes.MockLogger{}
 	mp := &fakes.MockProducer{}
 	producer := &adapters.ProducerAdapter{Producer: mp}
@@ -168,7 +168,7 @@ func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
 func TestAuditMiddleware_SuccessResponse_NoResponseBody(t *testing.T) {
 	e := echo.New()
 
-	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", uuid.New(), 1024)
+	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", "en", uuid.New(), 1024)
 	logger := &fakes.MockLogger{}
 	mock := &fakes.MockProducer{}
 	producer := &adapters.ProducerAdapter{Producer: mock}
@@ -226,7 +226,7 @@ func TestAuditMiddleware_SuccessResponse_NoResponseBody(t *testing.T) {
 func TestAuditMiddleware_ErrorResponse_CapturesResponseBody(t *testing.T) {
 	e := echo.New()
 
-	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", uuid.New(), 1024)
+	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", "en", uuid.New(), 1024)
 	logger := &fakes.MockLogger{}
 	mock := &fakes.MockProducer{}
 	producer := &adapters.ProducerAdapter{Producer: mock}
@@ -299,7 +299,7 @@ func TestAuditMiddleware_ErrorResponse_CapturesResponseBody(t *testing.T) {
 func TestAuditMiddleware_ServerError_CapturesResponseBody(t *testing.T) {
 	e := echo.New()
 
-	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", uuid.New(), 1024)
+	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", "en", uuid.New(), 1024)
 	logger := &fakes.MockLogger{}
 	mock := &fakes.MockProducer{}
 	producer := &adapters.ProducerAdapter{Producer: mock}

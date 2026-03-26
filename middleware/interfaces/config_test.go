@@ -15,7 +15,7 @@ func mockCallable(config interfaces.Config) (string, uuid.UUID, int16) {
 }
 
 func TestConfig_CallableAttributes(t *testing.T) {
-	c := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", uuid.New(), 1024*2)
+	c := fakes.NewConfig("dp", "core", "new-service", "v1.0.0-alpha.1", "en", uuid.New(), 1024*2)
 
 	// Assign to interface
 	var cfg interfaces.Config = c
