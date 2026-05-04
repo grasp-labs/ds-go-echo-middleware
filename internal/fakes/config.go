@@ -1,6 +1,9 @@
 package fakes
 
 import (
+	"context"
+	"time"
+
 	"github.com/allegro/bigcache/v3"
 	"github.com/google/uuid"
 )
@@ -45,6 +48,13 @@ func (c *MockConfig) Version() string {
 }
 
 func NewConfig(d, sg, n, v string, pid uuid.UUID, mb int16) *MockConfig {
+	cache, _ := bigcache.New(context.Background(), bigcache.Config{
+		Shards:             1,
+		LifeWindow:         5 * time.Minute,
+		MaxEntriesInWindow: 100,
+		MaxEntrySize:       500,
+		HardMaxCacheSize:   8,
+	})
 	return &MockConfig{
 		domain:        d,
 		serviceGroup:  sg,
@@ -52,5 +62,6 @@ func NewConfig(d, sg, n, v string, pid uuid.UUID, mb int16) *MockConfig {
 		version:       v,
 		productID:     pid,
 		memoryLimitMB: mb,
+		apiCache:      cache,
 	}
 }
