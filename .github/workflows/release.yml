@@ -69,5 +69,6 @@ jobs:
         with:
           tag_name: ${{ steps.meta.outputs.VERSION }}
           name: Release ${{ steps.meta.outputs.VERSION }}
+          generate_release_notes: true
           draft: false
           prerelease: false
