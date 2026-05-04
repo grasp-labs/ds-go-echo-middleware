@@ -48,13 +48,12 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 
 			}
 
-			// Use the user information from the claims (e.g., Sub or Rol)
 			userID := claims.Sub
 
 			entry, err := cfg.APICache().Get(userID)
 			if err == nil {
 				logger.Info(ctx, "Cache entry for user: %s", userID)
-				if userIsMember(ctx, logger, entry, roles) {
+				if isAdmin(ctx, logger, entry) || hasAccess(ctx, logger, entry, roles) {
 					logger.Info(ctx, "Entitlement accepts request for user: %s", userID)
 					return next(c)
 				}
@@ -88,13 +87,12 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 				return errorHandler(c, &cfg, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
-			// Cache result
 			err = cfg.APICache().Set(userID, body)
 			if err != nil {
 				logger.Error(ctx, "failed to set %s in cache", userID)
 			}
 
-			if !userIsMember(ctx, logger, body, roles) {
+			if !isAdmin(ctx, logger, body) && !hasAccess(ctx, logger, body, roles) {
 				return errorHandler(c, &cfg, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
@@ -104,33 +102,39 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 	}
 }
 
-// Function asserting if target group is one of the groups
-// user has a membership in.
-func userIsMember(ctx context.Context, logger interfaces.Logger, responseBody []byte, namesToMatch []string) bool {
-	var entitlements []entitlement.Entitlement
-
-	// Unmarshal the JSON response into a slice of ApiResponse
-	err := json.Unmarshal(responseBody, &entitlements)
-	if err != nil {
-		logger.Error(ctx, "Failed to unmarshal API response: %v", err)
+// isAdmin returns true when the entitlements response contains the "admin" group.
+func isAdmin(ctx context.Context, logger interfaces.Logger, responseBody []byte) bool {
+	var groups []entitlement.Entitlement
+	if err := json.Unmarshal(responseBody, &groups); err != nil {
+		logger.Error(ctx, "Failed to unmarshal entitlements response: %v", err)
 		return false
 	}
-
-	// Create a map for quick lookup of names to match
-	nameSet := make(map[string]bool)
-	for _, name := range namesToMatch {
-		nameSet[name] = true
-	}
-
-	// Check if any of the names match in the response
-	for _, item := range entitlements {
-		if _, exists := nameSet[item.Name]; exists {
-			logger.Info(ctx, "Match found for name: %s", item.Name)
-			return true // Return true as soon as a match is found
+	for _, g := range groups {
+		if g.Name == "users.admins" {
+			logger.Info(ctx, "Admin group membership grants access")
+			return true
 		}
 	}
+	return false
+}
 
-	// Return false if no match was found
+// hasAccess returns true when the entitlements response contains any of the required roles.
+func hasAccess(ctx context.Context, logger interfaces.Logger, responseBody []byte, roles []string) bool {
+	var groups []entitlement.Entitlement
+	if err := json.Unmarshal(responseBody, &groups); err != nil {
+		logger.Error(ctx, "Failed to unmarshal entitlements response: %v", err)
+		return false
+	}
+	allowed := make(map[string]bool, len(roles))
+	for _, r := range roles {
+		allowed[r] = true
+	}
+	for _, g := range groups {
+		if allowed[g.Name] {
+			logger.Info(ctx, "Match found for name: %s", g.Name)
+			return true
+		}
+	}
 	return false
 }
 
