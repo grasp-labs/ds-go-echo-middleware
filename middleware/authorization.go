@@ -20,6 +20,8 @@ import (
 	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
 
+const adminGroup = "users.admins"
+
 // AuthorizationMiddleware for asserting a user is permitted
 // to perform action.
 func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
@@ -51,9 +53,11 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			userID := claims.Sub
 
 			entry, err := cfg.APICache().Get(userID)
-			if err == nil {
+			if err != nil {
+				logger.Info(ctx, "Cache miss for user %s: %v", userID, err)
+			} else {
 				logger.Info(ctx, "Cache entry for user: %s", userID)
-				if isAdmin(ctx, logger, entry) || hasAccess(ctx, logger, entry, roles) {
+				if isGranted(ctx, logger, entry, roles) {
 					logger.Info(ctx, "Entitlement accepts request for user: %s", userID)
 					return next(c)
 				}
@@ -87,12 +91,13 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 				return errorHandler(c, &cfg, http.StatusUnauthorized, "Entitlements refused request", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
+			// Cache result
 			err = cfg.APICache().Set(userID, body)
 			if err != nil {
 				logger.Error(ctx, "failed to set %s in cache", userID)
 			}
 
-			if !isAdmin(ctx, logger, body) && !hasAccess(ctx, logger, body, roles) {
+			if !isGranted(ctx, logger, body, roles) {
 				return errorHandler(c, &cfg, http.StatusForbidden, "Permission denied", nil, logger, producer, "authz.denied", claims, topic)
 			}
 
@@ -102,33 +107,22 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 	}
 }
 
-// isAdmin returns true when the entitlements response contains the "admin" group.
-func isAdmin(ctx context.Context, logger interfaces.Logger, responseBody []byte) bool {
+// isGranted returns true when the entitlements response grants access — either
+// because the user is a member of "users.admins" or of one of the required roles.
+// Parses the response body once and checks both conditions in a single pass.
+func isGranted(ctx context.Context, logger interfaces.Logger, responseBody []byte, roles []string) bool {
 	var groups []entitlement.Entitlement
 	if err := json.Unmarshal(responseBody, &groups); err != nil {
 		logger.Error(ctx, "Failed to unmarshal entitlements response: %v", err)
 		return false
 	}
-	for _, g := range groups {
-		if g.Name == "users.admins" {
-			logger.Info(ctx, "Admin group membership grants access")
-			return true
-		}
-	}
-	return false
-}
 
-// hasAccess returns true when the entitlements response contains any of the required roles.
-func hasAccess(ctx context.Context, logger interfaces.Logger, responseBody []byte, roles []string) bool {
-	var groups []entitlement.Entitlement
-	if err := json.Unmarshal(responseBody, &groups); err != nil {
-		logger.Error(ctx, "Failed to unmarshal entitlements response: %v", err)
-		return false
-	}
-	allowed := make(map[string]bool, len(roles))
+	allowed := make(map[string]bool, len(roles)+1)
+	allowed[adminGroup] = true
 	for _, r := range roles {
 		allowed[r] = true
 	}
+
 	for _, g := range groups {
 		if allowed[g.Name] {
 			logger.Info(ctx, "Match found for name: %s", g.Name)
