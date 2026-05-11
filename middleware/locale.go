@@ -3,6 +3,7 @@ package middleware
 import (
 	"strings"
 
+	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/text/language"
 )
@@ -55,6 +56,8 @@ func LocaleMiddleware(def string) echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			loc := LocaleFromHeader(c, def)
 			c.Set("locale", loc)
+			r := c.Request()
+			c.SetRequest(r.WithContext(requestctx.SetLocale(r.Context(), loc)))
 			return next(c)
 		}
 	}
