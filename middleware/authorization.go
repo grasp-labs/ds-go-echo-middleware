@@ -3,10 +3,11 @@ package middleware
 import (
 	"context"
 	"encoding/json"
-	"time"
-
+	"errors"
 	"io"
 	"net/http"
+	neturl "net/url"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -74,13 +75,17 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 			client := &http.Client{Timeout: 5 * time.Second}
 			resp, err := client.Do(req)
 			if err != nil {
+				var urlErr *neturl.Error
+				if errors.As(err, &urlErr) && urlErr.Timeout() {
+					return errorHandler(c, &cfg, http.StatusBadGateway, "Entitlement API request timed out", err, logger, producer, "authz.error", claims, topic)
+				}
 				return errorHandler(c, &cfg, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims, topic)
 			}
 
 			defer func() { _ = resp.Body.Close() }()
 
 			latency := time.Since(startTime)
-			logger.Info(ctx, "Entitlement API latency ms: %s", latency.Milliseconds())
+			logger.Info(ctx, "Entitlement API latency ms: %d", latency.Milliseconds())
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
@@ -192,7 +197,16 @@ func errorHandler(
 		logger.Error(ctx, "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", eventType, topic, event.Id.String(), kafkaErr)
 	}
 
-	return echo.ErrForbidden
+	switch status_code {
+	// Allow consumers to handle bad gateway errors gracefully
+	case http.StatusBadGateway:
+		return echo.ErrBadGateway
+	case http.StatusForbidden:
+		return echo.ErrForbidden
+	// For all other errors, return a forbidden error
+	default:
+		return echo.ErrForbidden
+	}
 }
 
 func safeErr(err error) *string {
