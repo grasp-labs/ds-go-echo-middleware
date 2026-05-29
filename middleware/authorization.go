@@ -22,9 +22,14 @@ import (
 
 const adminGroup = "users.admins"
 
+// DefaultEntitlementTimeout is the default timeout for calls to the entitlement API.
+// Override via the entitlementTimeout parameter when tighter or looser bounds are needed.
+const DefaultEntitlementTimeout = 5 * time.Second
+
 // AuthorizationMiddleware for asserting a user is permitted
 // to perform action.
-func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
+func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer *adapters.ProducerAdapter, topic string, timeout time.Duration) echo.MiddlewareFunc {
+	client := &http.Client{}
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
@@ -65,16 +70,17 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 
 			// Make external entitlement API call
 			startTime := time.Now().UTC()
-			req, err := http.NewRequest("GET", url, nil)
+			reqCtx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			req, err := http.NewRequestWithContext(reqCtx, "GET", url, nil)
 			if err != nil {
 				return errorHandler(c, &cfg, http.StatusInternalServerError, "Failed to create request to entitlement API", err, logger, producer, "authz.error", claims, topic)
 			}
 			req.Header.Set("Authorization", authToken)
 
-			client := &http.Client{Timeout: 5 * time.Second}
 			resp, err := client.Do(req)
 			if err != nil {
-				return errorHandler(c, &cfg, http.StatusInternalServerError, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims, topic)
+				return errorHandler(c, &cfg, http.StatusServiceUnavailable, "Failed to make request to Entitlement API", err, logger, producer, "authz.error", claims, topic)
 			}
 
 			defer func() { _ = resp.Body.Close() }()
@@ -84,7 +90,7 @@ func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, ro
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
-				return errorHandler(c, &cfg, http.StatusInternalServerError, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims, topic)
+				return errorHandler(c, &cfg, http.StatusServiceUnavailable, "Failed to read response body from Entitlements API", err, logger, producer, "authz.error", claims, topic)
 			}
 
 			if resp.StatusCode != http.StatusOK {
@@ -192,7 +198,7 @@ func errorHandler(
 		logger.Error(ctx, "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", eventType, topic, event.Id.String(), kafkaErr)
 	}
 
-	return echo.ErrForbidden
+	return echo.NewHTTPError(status_code)
 }
 
 func safeErr(err error) *string {

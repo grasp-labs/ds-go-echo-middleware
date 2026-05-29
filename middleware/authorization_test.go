@@ -34,7 +34,7 @@ func newAuthzEcho(t *testing.T, userClaims *claims.Context, entitlementsURL stri
 	topic := "ds.test.authz.v1"
 
 	e.Use(injectContext(userClaims))
-	e.Use(middleware.AuthorizationMiddleware(cfg, logger, []string{"required-group"}, entitlementsURL, producer, topic))
+	e.Use(middleware.AuthorizationMiddleware(cfg, logger, []string{"required-group"}, entitlementsURL, producer, topic, middleware.DefaultEntitlementTimeout))
 	e.GET("/protected/", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 	return e
 }
@@ -178,13 +178,13 @@ func TestAuthorizationMiddleware_EntitlementsReturnsError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 // --- Infrastructure tests ---
 
 // TestAuthorizationMiddleware_MissingUserContext checks that a missing user
-// context is denied (errorHandler always returns echo.ErrForbidden).
+// context is denied.
 func TestAuthorizationMiddleware_MissingUserContext(t *testing.T) {
 	e := echo.New()
 	cfg := fakes.NewConfig("dp", "core", "test-svc", "v0.0.1", uuid.New(), 512)
@@ -192,12 +192,12 @@ func TestAuthorizationMiddleware_MissingUserContext(t *testing.T) {
 	producer := &adapters.ProducerAdapter{Producer: &fakes.MockProducer{}}
 	topic := "ds.test.authz.v1"
 
-	e.Use(middleware.AuthorizationMiddleware(cfg, logger, []string{"required-group"}, "http://unused/", producer, topic))
+	e.Use(middleware.AuthorizationMiddleware(cfg, logger, []string{"required-group"}, "http://unused/", producer, topic, middleware.DefaultEntitlementTimeout))
 	e.GET("/protected/", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 
 	req := httptest.NewRequest(http.MethodGet, "/protected/", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
