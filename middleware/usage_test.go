@@ -73,6 +73,7 @@ func TestUsageMiddleware_BasicFlow(t *testing.T) {
 
 	// Assertions
 	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, mock.WaitForSend(time.Second), "Producer should have been called within 1s")
 	assert.True(t, mock.Called(), "Producer should have been called")
 	assert.NotEmpty(t, mock.Key(), "Usage key should be set")
 

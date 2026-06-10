@@ -192,10 +192,7 @@ func errorHandler(
 		},
 	}
 
-	kafkaErr := producer.Send(ctx, topic, event)
-	if kafkaErr != nil {
-		logger.Error(ctx, "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", eventType, topic, event.Id.String(), kafkaErr)
-	}
+	sendEventAsync(producer, logger, topic, event, eventType)
 
 	switch status_code {
 	// Allow consumers to handle bad gateway errors gracefully
