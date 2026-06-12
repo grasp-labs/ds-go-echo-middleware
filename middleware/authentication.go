@@ -147,10 +147,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), topic, event)
-			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", "login.success", topic, event.Id.String(), kafkaErr)
-			}
+			sendEventAsync(producer, logger, topic, event, "login.success")
 			return true, nil
 		},
 		ErrorHandler: func(handlerErr error, c echo.Context) error {
@@ -177,10 +174,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), topic, event)
-			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", "login.failure", topic, event.Id.String(), kafkaErr)
-			}
+			sendEventAsync(producer, logger, topic, event, "login.failure")
 
 			return echo.ErrUnauthorized
 		},

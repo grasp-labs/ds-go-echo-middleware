@@ -146,10 +146,7 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				},
 			}
 
-			kafkaErr := producer.Send(c.Request().Context(), topic, event)
-			if kafkaErr != nil {
-				logger.Error(c.Request().Context(), "Failed to send %s event to Kafka topic '%s' for event ID %s: %v", "audit.log", topic, event.Id.String(), kafkaErr)
-			}
+			sendEventAsync(producer, logger, topic, event, "audit.log")
 
 			return callErr
 		}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -62,6 +63,7 @@ func TestAuditMiddleware_BasicFlow(t *testing.T) {
 
 	// Assertions
 	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.True(t, mock.WaitForSend(time.Second), "Producer should have been called within 1s")
 	assert.True(t, mock.Called(), "Producer should have been called")
 	assert.NotEmpty(t, mock.Key(), "Audit key (request ID) should be set")
 
@@ -140,6 +142,7 @@ func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	// Producer should have been called even for non-JSON
+	assert.True(t, mp.WaitForSend(time.Second), "Producer should have been called within 1s")
 	if !assert.True(t, mp.Called(), "Producer should have been called for non-JSON too") {
 		t.Fatalf("producer not called; check GetTenantId() expectations and userContext fixture")
 	}
@@ -195,6 +198,7 @@ func TestAuditMiddleware_SuccessResponse_NoResponseBody(t *testing.T) {
 	e.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.True(t, mock.WaitForSend(time.Second), "Producer should have been called within 1s")
 	assert.True(t, mock.Called(), "Producer should have been called")
 
 	eventJson, ok := mock.Value().(sdkmodels.EventJson)
@@ -268,6 +272,7 @@ func TestAuditMiddleware_ErrorResponse_CapturesResponseBody(t *testing.T) {
 	assert.Equal(t, "email", clientResponse["field"])
 
 	// Verify audit log was sent to Kafka
+	assert.True(t, mock.WaitForSend(time.Second), "Producer should have been called within 1s")
 	assert.True(t, mock.Called(), "Producer should have been called")
 
 	eventJson, ok := mock.Value().(sdkmodels.EventJson)
@@ -325,6 +330,7 @@ func TestAuditMiddleware_ServerError_CapturesResponseBody(t *testing.T) {
 	e.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.True(t, mock.WaitForSend(time.Second), "Producer should have been called within 1s")
 
 	eventJson := mock.Value().(sdkmodels.EventJson)
 	payloadPtr, ok := eventJson.Payload.(*map[string]any)
