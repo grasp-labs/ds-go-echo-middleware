@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,6 +23,20 @@ import (
 	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/internal/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 )
+
+type authConfig struct {
+	audience string // "" = disabled
+}
+
+// AuthOption configures AuthenticationMiddleware.
+type AuthOption func(*authConfig)
+
+// WithAudience enables the RFC 8707 audience-confusion defence: a verified token
+// is rejected unless its `aud` contains resource. Pass the service's exact
+// resource id (== ResourceMetadata.Resource). Omit to disable (default).
+func WithAudience(resource string) AuthOption {
+	return func(a *authConfig) { a.audience = resource }
+}
 
 // ParseRSAPublicKey parses a PEM-encoded RSA public key and handles PKCS8 or PKCS1 formats
 func ParseRSAPublicKey(pemKey string) (*rsa.PublicKey, error) {
@@ -48,8 +63,15 @@ func ParseRSAPublicKey(pemKey string) (*rsa.PublicKey, error) {
 	return rsaPubKey, nil
 }
 
-// AuthenticationMiddleware returns the JWT middleware configured with a validator
-func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, publicKeyPEM string, producer *adapters.ProducerAdapter, topic string) (echo.MiddlewareFunc, error) {
+// AuthenticationMiddleware returns the JWT middleware configured with a validator.
+// Pass WithAudience to enable RFC 8707 audience binding; existing callers with
+// five arguments compile unchanged and retain today's behaviour.
+func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, publicKeyPEM string, producer *adapters.ProducerAdapter, topic string, opts ...AuthOption) (echo.MiddlewareFunc, error) {
+	ac := &authConfig{}
+	for _, o := range opts {
+		o(ac)
+	}
+
 	// Parse the public key from PEM format
 	publicKey, err := ParseRSAPublicKey(publicKeyPEM)
 	if err != nil {
@@ -103,6 +125,12 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 
 			if err != nil || !parsed.Valid {
 				logger.Error(c.Request().Context(), "Invalid token: %v", err)
+				return false, WrapErr(c, "unauthorized")
+			}
+
+			// Audience check (RFC 8707) — only when enabled via WithAudience.
+			if ac.audience != "" && !slices.Contains(claims.Aud, ac.audience) {
+				logger.Error(c.Request().Context(), "token aud %v missing resource %s", claims.Aud, ac.audience)
 				return false, WrapErr(c, "unauthorized")
 			}
 
