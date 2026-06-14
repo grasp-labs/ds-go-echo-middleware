@@ -8,7 +8,6 @@ import (
 	"unicode"
 
 	"github.com/google/uuid"
-	"github.com/labstack/gommon/log"
 )
 
 type Context struct {
@@ -52,6 +51,10 @@ func (c Context) Repr(input string) string {
 	return b.String()
 }
 
+// clockSkewLeewaySeconds is the tolerance applied to exp/nbf/iat to absorb
+// small clock differences between the IdP and this service (contract: ≤ 60s).
+const clockSkewLeewaySeconds = 30
+
 func (c Context) Valid() error {
 	now := time.Now().Unix()
 	// Convert float timestamps to int64 for comparison
@@ -59,26 +62,23 @@ func (c Context) Valid() error {
 	nbf := int64(c.Nbf)
 	iat := int64(c.Iat)
 
-	// Validate expiration (exp)
-	if exp != 0 && now > exp {
+	// Validate expiration (exp), allowing a small leeway for clock skew.
+	if exp != 0 && now > exp+clockSkewLeewaySeconds {
 		return errors.New("token has expired")
 	}
 
 	// Validate not before (nbf)
-	if nbf != 0 && now < nbf {
+	if nbf != 0 && now < nbf-clockSkewLeewaySeconds {
 		return errors.New("token not yet valid")
 	}
 
 	// Validate issed at (iat)
-	if iat != 0 && now < iat {
+	if iat != 0 && now < iat-clockSkewLeewaySeconds {
 		return errors.New("token issued in the future")
 	}
 
-	// Validate issuer
-	if c.Iss != "https://auth.grasp-daas.com" && c.Iss != "https://auth-dev.grasp-daas.com" {
-		log.Errorf("Invalid iss value: %s", c.Iss)
-		return errors.New("invalid issuer")
-	}
+	// NOTE: issuer (`iss`) is enforced per-environment in the auth middleware
+	// against Config.Issuer(); it is intentionally not hardcoded here.
 
 	if c.Sub == "" {
 		return errors.New("invalid sub")

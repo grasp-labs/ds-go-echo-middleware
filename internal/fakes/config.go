@@ -16,6 +16,7 @@ type MockConfig struct {
 	productID     uuid.UUID
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
+	issuer        string
 }
 
 // Implement the interface methods
@@ -43,6 +44,15 @@ func (c *MockConfig) ServiceGroup() string {
 	return c.serviceGroup
 }
 
+func (c *MockConfig) Issuer() string {
+	return c.issuer
+}
+
+// SetIssuer overrides the default issuer (test helper).
+func (c *MockConfig) SetIssuer(iss string) {
+	c.issuer = iss
+}
+
 func (c *MockConfig) Version() string {
 	return c.version
 }
@@ -63,5 +73,6 @@ func NewConfig(d, sg, n, v string, pid uuid.UUID, mb int16) *MockConfig {
 		productID:     pid,
 		memoryLimitMB: mb,
 		apiCache:      cache,
+		issuer:        "https://auth.grasp-daas.com",
 	}
 }
