@@ -94,7 +94,7 @@ func (j *jwksCache) getKey(kid string) (*rsa.PublicKey, error) {
 
 	// Cooldown gate: refresh at most once per cooldown, even on failure.
 	j.mu.Lock()
-	eligible := !j.hasFetched || time.Since(j.lastFetch) >= j.cooldown
+	eligible := j.lastFetch.IsZero() || time.Since(j.lastFetch) >= j.cooldown
 	if eligible {
 		j.lastFetch = time.Now()
 	}
@@ -177,6 +177,9 @@ func jwkToRSAPublicKey(k jwk) (*rsa.PublicKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode exponent: %w", err)
 	}
+	if len(nBytes) == 0 {
+		return nil, errors.New("modulus is empty")
+	}
 
 	// Right-align the exponent into 8 bytes to read it as a big-endian uint64.
 	if len(eBytes) > 8 {
@@ -187,6 +190,10 @@ func jwkToRSAPublicKey(k jwk) (*rsa.PublicKey, error) {
 	e := binary.BigEndian.Uint64(eBuf[:])
 	if e == 0 {
 		return nil, errors.New("invalid zero exponent")
+	}
+
+	if e > uint64(^uint(0)>>1) {
+		return nil, errors.New("exponent overflow int")
 	}
 
 	return &rsa.PublicKey{

@@ -72,7 +72,7 @@ func (c Context) Valid() error {
 		return errors.New("token not yet valid")
 	}
 
-	// Validate issed at (iat)
+	// Validate issued at (iat)
 	if iat != 0 && now < iat-clockSkewLeewaySeconds {
 		return errors.New("token issued in the future")
 	}

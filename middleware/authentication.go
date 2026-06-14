@@ -85,7 +85,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 		o(ac)
 	}
 
-	issuer := cfg.Issuer()
+	issuer := strings.TrimRight(cfg.Issuer(), "/")
 	if issuer == "" {
 		return nil, errors.New("config issuer is empty; cannot enforce iss")
 	}
@@ -197,7 +197,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 			ctx = requestctx.SetPrincipal(ctx, principal)
 			c.SetRequest(c.Request().WithContext(ctx))
 
-			// Should send Login Succeded event
+			// Should send Login Succeeded event
 			requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
 			sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
 

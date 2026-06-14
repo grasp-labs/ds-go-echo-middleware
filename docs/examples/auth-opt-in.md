@@ -1,9 +1,9 @@
 # 🔐 Example: Authentication opt-in features
 
-The authentication middleware is **backward compatible**: calling it with the
-original five arguments keeps today's behaviour (static PEM verification, no
-audience check). The new capabilities are **opt-in** via functional options and
-one wiring call.
+ The authentication middleware keeps the same call signature: calling it with the
+ original five arguments preserves the default behaviour (static PEM verification, no
+ audience check). However, `Config.Issuer()` is now required so the middleware can
+ bind tokens to the correct issuer (and derive JWKS URIs when enabled).
 
 | Feature | How to enable | Default when omitted |
 | ------- | ------------- | -------------------- |
@@ -99,7 +99,7 @@ After authentication, a normalized principal is available on the request
 `context.Context` — framework-agnostic, so service/repo layers can read it too:
 
 ```go
-import "github.com/grasp-labs/ds-go-echo-middleware/middleware/requestctx"
+import "github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
 
 func handler(c echo.Context) error {
 	p, ok := requestctx.GetPrincipal(c.Request().Context())
