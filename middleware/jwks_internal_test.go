@@ -87,7 +87,7 @@ func TestJWKSCache_ResolvesByKid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.N.Cmp(k1.PublicKey.N) != 0 {
+	if got.N.Cmp(k1.N) != 0 {
 		t.Fatal("resolved key does not match k1")
 	}
 }
@@ -125,7 +125,7 @@ func TestJWKSCache_PicksUpRotatedKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("k2 should resolve after refresh: %v", err)
 	}
-	if got.N.Cmp(k2.PublicKey.N) != 0 {
+	if got.N.Cmp(k2.N) != 0 {
 		t.Fatal("resolved key does not match k2")
 	}
 }
@@ -173,7 +173,7 @@ func TestJWKSCache_ServesStaleOnFetchFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected last-good key to be served on fetch failure: %v", err)
 	}
-	if got.N.Cmp(k1.PublicKey.N) != 0 {
+	if got.N.Cmp(k1.N) != 0 {
 		t.Fatal("stale-served key does not match k1")
 	}
 }

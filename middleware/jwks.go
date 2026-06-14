@@ -127,7 +127,7 @@ func (j *jwksCache) lookup(kid string, requireFresh bool) (*rsa.PublicKey, bool)
 	if !ok {
 		return nil, false
 	}
-	if requireFresh && !(j.hasFetched && time.Since(j.fetchedAt) < j.ttl) {
+	if requireFresh && (!j.hasFetched || time.Since(j.fetchedAt) >= j.ttl) {
 		return nil, false
 	}
 	return key, true
