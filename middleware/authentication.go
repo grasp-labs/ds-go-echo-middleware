@@ -26,6 +26,7 @@ import (
 
 type authConfig struct {
 	audience string // "" = disabled
+	useJWKS  bool   // true = resolve keys by kid from live JWKS
 }
 
 // AuthOption configures AuthenticationMiddleware.
@@ -37,6 +38,18 @@ type AuthOption func(*authConfig)
 func WithAudience(resource string) AuthOption {
 	return func(a *authConfig) { a.audience = resource }
 }
+
+// WithJWKS enables key-rotation-safe verification: instead of pinning a single
+// static PEM, the verifying key is resolved by the token's `kid` from the live
+// JWKS at {Config.Issuer()}/oauth/.well-known/jwks.json, cached with a short TTL
+// and refreshed on an unknown kid (per the key-rotation contract). When set, the
+// publicKeyPEM argument is ignored and may be empty.
+func WithJWKS() AuthOption {
+	return func(a *authConfig) { a.useJWKS = true }
+}
+
+// jwksWellKnownSuffix is appended to the issuer to locate the JWKS document.
+const jwksWellKnownSuffix = "/oauth/.well-known/jwks.json"
 
 // ParseRSAPublicKey parses a PEM-encoded RSA public key and handles PKCS8 or PKCS1 formats
 func ParseRSAPublicKey(pemKey string) (*rsa.PublicKey, error) {
@@ -72,10 +85,38 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 		o(ac)
 	}
 
-	// Parse the public key from PEM format
-	publicKey, err := ParseRSAPublicKey(publicKeyPEM)
-	if err != nil {
-		return nil, err
+	issuer := strings.TrimRight(cfg.Issuer(), "/")
+	if issuer == "" {
+		return nil, errors.New("config issuer is empty; cannot enforce iss")
+	}
+
+	// Resolve the verifying key source: either the live JWKS (rotation-safe,
+	// keyed by kid) or a single static PEM (legacy / fixed-key deployments).
+	var (
+		staticKey *rsa.PublicKey
+		jwks      *jwksCache
+	)
+	if ac.useJWKS {
+		jwks = newJWKSCache(issuer + jwksWellKnownSuffix)
+	} else {
+		var err error
+		staticKey, err = ParseRSAPublicKey(publicKeyPEM)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// keyFunc resolves the RSA public key for a parsed token, rejecting any
+	// non-RSA signing method (never accept alg:none / HS*).
+	keyFunc := func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		if jwks != nil {
+			kid, _ := t.Header["kid"].(string)
+			return jwks.getKey(kid)
+		}
+		return staticKey, nil
 	}
 
 	// Helper to normalize token (strip "Bearer " if present)
@@ -115,16 +156,22 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 			}
 
 			claims := &models.Context{}
-			parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
-				if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
-					logger.Error(c.Request().Context(), "unexpected signing method: %v", t.Header["alg"])
-					return false, WrapErr(c, "unauthorized")
-				}
-				return publicKey, nil
-			})
+			parsed, err := jwt.ParseWithClaims(token, claims, keyFunc)
 
 			if err != nil || !parsed.Valid {
 				logger.Error(c.Request().Context(), "Invalid token: %v", err)
+				return false, WrapErr(c, "unauthorized")
+			}
+
+			// Enforce issuer against this environment's configured issuer.
+			if claims.Iss != issuer {
+				logger.Error(c.Request().Context(), "token iss %q does not match expected issuer %q", claims.Iss, issuer)
+				return false, WrapErr(c, "unauthorized")
+			}
+
+			// Reject any unrecognized principal kind (cls must be user|app).
+			if !requestctx.ValidKind(claims.Cls) {
+				logger.Error(c.Request().Context(), "token has invalid cls: %q", claims.Cls)
 				return false, WrapErr(c, "unauthorized")
 			}
 
@@ -134,23 +181,25 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				return false, WrapErr(c, "unauthorized")
 			}
 
+			// Build the normalized principal (kind/id/tenant/roles/jti).
+			principal, err := requestctx.NewPrincipal(claims)
+			if err != nil {
+				logger.Error(c.Request().Context(), "Invalid tenant_id from claims: %s", claims.Rsc)
+				return false, WrapErr(c, "unauthorized")
+			}
+
 			// Stash claims in Echo context (typed key) and standard context
 			c.Set("userContext", claims)
 
 			// Also inject into context.Context so it propagates downstream
 			// to functions not tied to echo such as Kafka.
 			ctx := requestctx.SetUserContext(c.Request().Context(), claims)
+			ctx = requestctx.SetPrincipal(ctx, principal)
 			c.SetRequest(c.Request().WithContext(ctx))
 
-			// Should send Login Succeded event
+			// Should send Login Succeeded event
 			requestID := requestctx.GetOrNewRequestUUID(c.Request().Context())
 			sessionID := requestctx.GetOrNewSessionUUID(c.Request().Context())
-
-			tenantID, err := claims.GetTenantId()
-			if err != nil {
-				logger.Error(c.Request().Context(), "Invalid tenant_id from claims: %s", claims.Rsc)
-				return false, WrapErr(c, "unauthorized")
-			}
 
 			// Optional message from header
 			var message *string
@@ -160,7 +209,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 
 			event := sdkmodels.EventJson{
 				Id:          uuid.New(),
-				TenantId:    tenantID,
+				TenantId:    principal.TenantID,
 				RequestId:   requestID,
 				SessionId:   sessionID,
 				EventType:   "login.success", // Check this
@@ -169,6 +218,9 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				Message:     message,
 				Payload: &map[string]any{
 					"subject":     claims.Sub,
+					"cls":         principal.Kind,
+					"jti":         claims.Jti.String(),
+					"tenant_id":   principal.TenantID.String(),
 					"path":        c.Path(),
 					"user_agent":  c.Request().UserAgent(),
 					"remote_addr": c.Request().RemoteAddr,
@@ -180,6 +232,17 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 		},
 		ErrorHandler: func(handlerErr error, c echo.Context) error {
 			logger.Error(c.Request().Context(), "Jwt error: %v", handlerErr)
+
+			// Attach the RFC 6750 challenge to the 401. When this service has a
+			// resource id (WithAudience), point at its PRM document; otherwise a
+			// bare Bearer challenge.
+			if !c.Response().Committed {
+				challenge := "Bearer"
+				if ac.audience != "" {
+					challenge = fmt.Sprintf("Bearer resource_metadata=%q", ac.audience+WellKnownProtectedResourcePath)
+				}
+				c.Response().Header().Set(echo.HeaderWWWAuthenticate, challenge)
+			}
 
 			requestIDStr := requestctx.GetRequestID(c.Request().Context())
 			requestID, parseErr := uuid.Parse(requestIDStr)

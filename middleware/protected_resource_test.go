@@ -39,6 +39,7 @@ func signToken(t *testing.T, priv *rsa.PrivateKey, aud []string) string {
 	claims := jwt.MapClaims{
 		"iss": testIssuer,
 		"sub": "test-user",
+		"cls": "user",
 		"aud": aud,
 		"exp": float64(now.Add(time.Hour).Unix()),
 		"nbf": float64(now.Add(-time.Minute).Unix()),

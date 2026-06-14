@@ -17,8 +17,14 @@ type Config interface {
 	Name() string
 	ProductID() uuid.UUID
 	APICache() *bigcache.BigCache
+	Issuer() string // New: this env's identity-server issuer URL
 }
 ```
+
+> **`Issuer()`** returns this environment's identity-server issuer (e.g.
+> `https://auth.grasp-daas.com`). The authentication middleware enforces the
+> token `iss` against it and, when JWKS is enabled (see the auth opt-in example),
+> derives the JWKS URI from it as `{Issuer}/oauth/.well-known/jwks.json`.
 
 Since authorization middleware also require configuration, you may choose to add:
 
@@ -58,10 +64,11 @@ type AppConfig struct {
 	memoryLimitMB int16
 	apiCache      *bigcache.BigCache
 	permission    PermissionConfig
+	issuer        string
 }
 
 // NewAppConfig constructs a new AppConfig instance with required fields.
-func NewAppConfig(domain, serviceGroup, name, version string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm PermissionConfig) *AppConfig {
+func NewAppConfig(domain, serviceGroup, name, version string, productID uuid.UUID, limit int16, cache *bigcache.BigCache, perm PermissionConfig, issuer string) *AppConfig {
 	return &AppConfig{
 		domain:        domain,
 		serviceGroup:  serviceGroup,
@@ -71,6 +78,7 @@ func NewAppConfig(domain, serviceGroup, name, version string, productID uuid.UUI
 		memoryLimitMB: limit,
 		apiCache:      cache,
 		permission:    perm,
+		issuer:        issuer,
 	}
 }
 
@@ -106,6 +114,10 @@ func (c *AppConfig) APICache() *bigcache.BigCache {
 func (c *AppConfig) Permission() PermissionConfig {
 	return c.permission
 }
+
+func (c *AppConfig) Issuer() string {
+	return c.issuer
+}
 ```
 
 ## 📦 main.go (Usage Example)
@@ -138,6 +150,7 @@ func main() {
 			roles: []string{"admin", "user"},
 			url:   "https://entitlement-api.example.com/v1/user/roles",
 		},
+		"https://auth.grasp-daas.com", // issuer (per environment)
 	)
 
 	// Pass cfg into middleware setup
