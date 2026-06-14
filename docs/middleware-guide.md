@@ -85,7 +85,12 @@ opt-in via functional options and one wiring call:
 
 - `middleware.WithJWKS()` — rotation-safe verification (resolve keys by `kid`
   from the live JWKS instead of a static PEM).
-- `middleware.WithAudience(resourceID)` — RFC 8707 audience-confusion defence.
+- `middleware.WithAudience(resourceID)` — RFC 8707 audience-confusion defence
+  (this service's own resource id).
+- `middleware.WithSharedAudience(host)` — additionally accept the mesh-wide
+  shared audience (e.g. `https://grasp-daas.com`) so default tokens reach you.
+  The audience check is a set-membership test: a token passes if its `aud`
+  contains either value.
 - `middleware.RegisterProtectedResource(e, prefix, meta)` — RFC 9728 discovery
   endpoint + `WWW-Authenticate` challenge.
 

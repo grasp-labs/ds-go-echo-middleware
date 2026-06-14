@@ -236,6 +236,63 @@ func TestAuthN_401ChallengePointsAtResourceMetadataWhenAudienceSet(t *testing.T)
 	assert.Equal(t, want, rec.Header().Get("WWW-Authenticate"))
 }
 
+// ---------- shared (mesh-wide) audience ----------
+
+const testSharedAudience = "https://grasp-daas.com"
+
+func TestAuthN_AcceptsSharedAudience(t *testing.T) {
+	priv, pubPEM, err := fakes.GenerateRSAPairPEM()
+	require.NoError(t, err)
+	e := newAuthApp(t, pubPEM, testIssuer,
+		middleware.WithAudience(testResource),
+		middleware.WithSharedAudience(testSharedAudience),
+	)
+
+	// A default/mesh token carries only the shared host in aud.
+	tok := mintToken(t, priv, tokenOpts{cls: "user", aud: []string{testSharedAudience}})
+	rec := doGet(t, e, "/protected/", tok)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestAuthN_AcceptsOwnResourceWhenSharedConfigured(t *testing.T) {
+	priv, pubPEM, err := fakes.GenerateRSAPairPEM()
+	require.NoError(t, err)
+	e := newAuthApp(t, pubPEM, testIssuer,
+		middleware.WithAudience(testResource),
+		middleware.WithSharedAudience(testSharedAudience),
+	)
+
+	// A narrowed token carries this service's own resource id.
+	tok := mintToken(t, priv, tokenOpts{cls: "user", aud: []string{testResource}})
+	rec := doGet(t, e, "/protected/", tok)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestAuthN_RejectsUnrelatedAudienceWhenSharedConfigured(t *testing.T) {
+	priv, pubPEM, err := fakes.GenerateRSAPairPEM()
+	require.NoError(t, err)
+	e := newAuthApp(t, pubPEM, testIssuer,
+		middleware.WithAudience(testResource),
+		middleware.WithSharedAudience(testSharedAudience),
+	)
+
+	tok := mintToken(t, priv, tokenOpts{cls: "user", aud: []string{"https://grasp-daas.com/api/other/v1"}})
+	rec := doGet(t, e, "/protected/", tok)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestAuthN_SharedAudienceRejectedWhenOnlyResourceConfigured(t *testing.T) {
+	priv, pubPEM, err := fakes.GenerateRSAPairPEM()
+	require.NoError(t, err)
+	// No WithSharedAudience: a mesh token must NOT be accepted by a service that
+	// only declared its own resource id.
+	e := newAuthApp(t, pubPEM, testIssuer, middleware.WithAudience(testResource))
+
+	tok := mintToken(t, priv, tokenOpts{cls: "user", aud: []string{testSharedAudience}})
+	rec := doGet(t, e, "/protected/", tok)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
 // ---------- JWKS (rotation-safe) ----------
 
 func jwksHandlerFor(keys map[string]*rsa.PublicKey) http.HandlerFunc {

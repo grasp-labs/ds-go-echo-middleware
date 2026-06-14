@@ -1,6 +1,9 @@
 # Contract: OAuth Protected Resource discovery in `ds-go-echo-middleware`
 
-**Status:** proposed — to be implemented in `github.com/grasp-labs/ds-go-echo-middleware/v3`.
+**Status:** ✅ implemented in `github.com/grasp-labs/ds-go-echo-middleware/v3`
+(`RegisterProtectedResource`, `WithAudience`, `WithSharedAudience`). Shipped
+alongside JWKS key-rotation (`WithJWKS`), `cls` principal handling, and
+per-environment issuer enforcement via `Config.Issuer()`.
 **Consumers:** every Grasp EKS API service (`ai-gateway`, `state`, `file`, `config`, …).
 **Implements:** RFC 9728 (Protected Resource Metadata), RFC 6750 §3 (the `WWW-Authenticate`
 challenge), RFC 8707 (audience binding / audience-confusion defence).
@@ -25,11 +28,11 @@ The three pieces below are byte-for-byte the same logic for every service:
 2. **401 challenge** — every unauthenticated/invalid-token response must carry
    `WWW-Authenticate: Bearer resource_metadata="…"`. The producer of the 401 is
    already the shared `AuthenticationMiddleware` (it returns `echo.ErrUnauthorized`).
-3. **`aud` check** — reject any token whose `aud` does not contain this service's
-   resource id. The shared `AuthenticationMiddleware` already parses the claims
-   (`claims.Context.Aud []string`) and verifies signature + `iss`
-   (`Context.Valid()`), but **does not** check `aud` today. That gap is in the
-   shared layer, so the fix belongs there — fixing it once gives every service
+3. **`aud` check** — reject any token whose `aud` contains neither this service's
+   resource id nor the mesh-wide shared host (set-membership; see the API-Auth
+   contract). The shared `AuthenticationMiddleware` parses the claims
+   (`claims.Context.Aud []string`) and verifies signature + `iss`, and now also
+   performs this `aud` check when enabled — fixing it once gives every service
    the audience-confusion defence.
 
 Putting these in the middleware means a service that adopts the new version gets
@@ -37,20 +40,22 @@ the full discovery surface with ~5 lines of wiring.
 
 ---
 
-## 2. Current shared-middleware behaviour (baseline)
+## 2. Shared-middleware behaviour (as shipped in v3)
 
-`middleware.AuthenticationMiddleware(cfg, logger, publicKeyPEM, producer, topic)`:
+`middleware.AuthenticationMiddleware(cfg, logger, publicKeyPEM, producer, topic, opts ...AuthOption)`:
 
 - Reads `Authorization: Bearer …`, parses with `jwt.ParseWithClaims` into
-  `claims.Context`, verifies **RS256** against a static PEM public key.
-- `claims.Context.Valid()` checks `exp/nbf/iat`, `iss ∈ {auth, auth-dev}`, `sub`,
-  and that `rsc` is `tenantId:tenantName`.
-- **Does not** check `aud`.
-- On any failure the `KeyAuthConfig.ErrorHandler` emits a `login.failure` event and
-  returns `echo.ErrUnauthorized`, so the 401 flows through Echo's
-  `HTTPErrorHandler`. No `WWW-Authenticate` header is set.
-
-The contract additions below must preserve all of the above.
+  `claims.Context`, verifies **RS256** (rejects `alg: none`/HS\*).
+- Key source is either a **static PEM** (default) or, with `WithJWKS()`, the live
+  **JWKS resolved by `kid`** at `{Config.Issuer()}/oauth/.well-known/jwks.json`
+  (rotation-safe; see the key-rotation contract).
+- Enforces `iss == Config.Issuer()` (per environment), `exp`/`nbf` with a 30s
+  clock-skew leeway, `sub`, and that `rsc` is `tenantId:tenantName`.
+- Rejects an unrecognized/missing `cls` (must be `user`/`app`) and exposes a
+  normalized `requestctx.Principal`.
+- Checks `aud` only when enabled (§3b); see the set-membership rule below.
+- On any failure the `KeyAuthConfig.ErrorHandler` emits a `login.failure` event,
+  sets a `WWW-Authenticate` header, and returns `echo.ErrUnauthorized`.
 
 ---
 
@@ -124,34 +129,45 @@ func protectedResourceHandler(meta ResourceMetadata) echo.HandlerFunc {
 Add a variadic option so existing callers (every current service + the template)
 keep compiling unchanged. Default behaviour is identical to today.
 
+A variadic option keeps existing callers (every current service + the template)
+compiling unchanged; default behaviour is identical to before.
+
 ```go
 type authConfig struct {
-	audience string // "" = disabled
+	audience       string // this service's resource id ("" = audience check disabled)
+	sharedAudience string // additionally-accepted mesh-wide audience ("" = none)
+	useJWKS        bool
 }
 
 // AuthOption configures AuthenticationMiddleware.
 type AuthOption func(*authConfig)
 
-// WithAudience enables the RFC 8707 audience-confusion defence: a verified token
-// is rejected unless its `aud` contains resource. Pass the service's exact
-// resource id (== ResourceMetadata.Resource). Omit to disable (default).
+// WithAudience enables the RFC 8707 audience-confusion defence. Pass the
+// service's exact resource id (== ResourceMetadata.Resource); it also drives the
+// resource_metadata challenge on 401s. Omit to disable (default).
 func WithAudience(resource string) AuthOption {
 	return func(a *authConfig) { a.audience = resource }
 }
 
-// Signature becomes (append the variadic — source-compatible):
-//   func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger,
-//       publicKeyPEM string, producer *adapters.ProducerAdapter, topic string,
-//       opts ...AuthOption) (echo.MiddlewareFunc, error)
+// WithSharedAudience additionally accepts the mesh-wide shared audience (e.g.
+// "https://grasp-daas.com") so default tokens still reach this service.
+func WithSharedAudience(shared string) AuthOption {
+	return func(a *authConfig) { a.sharedAudience = shared }
+}
 ```
 
-Inside the `Validator`, **after** signature + claims validation succeed and
-before returning `true`, add:
+The audience check is a **set-membership** test (per the auth contract's "shared
+host OR own resource id" rule). Inside the `Validator`, after signature + claims
+validation succeed:
 
 ```go
-if ac.audience != "" && !slices.Contains(claims.Aud, ac.audience) {
-	logger.Error(c.Request().Context(), "token aud %v missing resource %s", claims.Aud, ac.audience)
-	return false, WrapErr(c, "unauthorized")
+if ac.audience != "" || ac.sharedAudience != "" {
+	accepted := (ac.audience != "" && slices.Contains(claims.Aud, ac.audience)) ||
+		(ac.sharedAudience != "" && slices.Contains(claims.Aud, ac.sharedAudience))
+	if !accepted {
+		logger.Error(c.Request().Context(), "token aud %v missing resource %q / shared %q", claims.Aud, ac.audience, ac.sharedAudience)
+		return false, WrapErr(c, "unauthorized")
+	}
 }
 ```
 
@@ -178,10 +194,13 @@ challenge header from 3a is attached automatically. No separate middleware neede
 - Non-401 responses (404, 403, 5xx, 200) are untouched.
 - Header is set only when the response is not yet committed.
 
-**`aud` check** (only when `WithAudience` is set):
-- A token whose `aud` does not contain the resource id → 401 (with challenge).
+**`aud` check** (only when `WithAudience` and/or `WithSharedAudience` is set) —
+set-membership:
 - A token whose `aud` contains the resource id (among others) → passes.
-- When `WithAudience` is not set → behaviour identical to today (no `aud` check).
+- With `WithSharedAudience`, a token whose `aud` contains the shared host → passes
+  (so default/mesh tokens reach the service).
+- A token whose `aud` contains neither accepted value → 401 (with challenge).
+- When neither option is set → behaviour identical to today (no `aud` check).
 
 **Backward compatibility:**
 - `AuthenticationMiddleware` called with the old 5 args compiles and behaves exactly as before.
@@ -207,16 +226,19 @@ its issuer (`DownStream().IDPBaseURL()`), and an enforcement flag
 ```go
 mw.RegisterProtectedResource(e, cfg.PathPrefix(), mw.ResourceMetadata{
 	Resource:             cfg.ResourceID(),
-	AuthorizationServers: []string{cfg.DownStream().IDPBaseURL()},
+	AuthorizationServers: []string{cfg.Issuer()},
 	ScopesSupported:      []string{"read", "write"},
 })
 
-var authOpts []mw.AuthOption
+authOpts := []mw.AuthOption{mw.WithJWKS()} // rotation-safe; JWKS URI from cfg.Issuer()
 if cfg.AudienceEnforced() {
-	authOpts = append(authOpts, mw.WithAudience(cfg.ResourceID()))
+	authOpts = append(authOpts,
+		mw.WithAudience(cfg.ResourceID()),               // narrowed tokens
+		mw.WithSharedAudience("https://grasp-daas.com"), // default/mesh tokens
+	)
 }
 auth, err := mw.AuthenticationMiddleware(
-	cfg, logger, cfg.JwtKey(), kafka.Producer(), kafka.ComplianceTopicID(), authOpts...,
+	cfg, logger, "" /* PEM unused with WithJWKS */, kafka.Producer(), kafka.ComplianceTopicID(), authOpts...,
 )
 ```
 
@@ -228,21 +250,28 @@ auth, err := mw.AuthenticationMiddleware(
 
 ---
 
-## 6. Tests to add in the middleware repo
+## 6. Tests in the middleware repo (implemented)
 
 - PRM handler: 200, exact JSON fields, CORS + Cache-Control headers, no auth required.
 - `RegisterProtectedResource`: a route returning `echo.ErrUnauthorized` yields a 401
   with the expected `WWW-Authenticate` value; a non-401 (e.g. `echo.ErrNotFound`) has
   no such header; a prior custom `HTTPErrorHandler` is still invoked.
 - `WithAudience`: matching `aud` passes; missing/mismatched `aud` → 401; option absent → no check.
+- `WithSharedAudience`: mesh token (shared host in `aud`) passes; own resource id
+  passes; unrelated `aud` → 401; shared token rejected when only `WithAudience` set.
+- `WithJWKS`: verify-by-`kid`; unknown `kid` → 401; rotation pickup; cooldown gating;
+  serve-stale on fetch failure; single fetch under concurrent cold start.
+- `cls`/issuer/leeway: user+app accepted, unknown/missing `cls` → 401, wrong env
+  issuer → 401, small clock skew tolerated.
 - Existing `AuthenticationMiddleware` tests still pass unchanged (signature compat).
 
 ---
 
 ## 7. Rollout
 
-1. Implement 3a + 3b in `ds-go-echo-middleware`, add §6 tests, cut **v2.4.0**.
-2. Bump `ai-gateway` (and the template) to v2.4.0 and add the §5 wiring +
-   `ResourceID()` / `AudienceEnforced()` config accessors.
+1. ✅ Implemented 3a + 3b in `ds-go-echo-middleware` with §6 tests, cut **v3.0.0**
+   (breaking: `Config` gained `Issuer()`).
+2. Bump `ai-gateway` (and the template) to v3.0.0 and add the §5 wiring +
+   `ResourceID()` / `AudienceEnforced()` / `Issuer()` config accessors.
 3. Coordinate the IdP `OAUTH_RESOURCE_ALLOWLIST` entry per env, then flip
    `AUDIENCE_ENFORCEMENT` on once tokens verify.

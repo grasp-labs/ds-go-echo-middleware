@@ -107,15 +107,36 @@ don't branch on `cls`; you branch only when a route is *human-only* or
 Audience (`aud`) is the **audience-confusion guard**: it ensures a token minted
 for service X cannot be replayed against service Y just because the signature is
 valid. The identity server sets `aud` from the client's RFC 8707 `resource`
-request (allowlist-gated) or a default audience.
+request (allowlist-gated) or the shared default audience.
 
-Because not every service has a registered resource id yet (and some shared
-tokens carry the default `aud`), audience enforcement is **opt-in per service /
-per route**:
+`aud` is always evaluated as a **set membership** test — treat it as a list even
+when it is a single string. A token is acceptable to your service if **any**
+value you accept is present in `aud`.
+
+### 4.0 The audience model (read this first)
+
+A token's `aud` takes one of two shapes, and your service must accept both for
+the platform to behave consistently:
+
+| `aud` value | How it arises | What it means |
+| --- | --- | --- |
+| `["https://grasp-daas.com"]` (shared host) | client sent **no** `resource` | a **mesh-wide** token — usable across all first-party APIs |
+| `"https://grasp-daas.com/api/<svc>/<ver>"` (one resource id) | client sent a single `resource=` | a **narrowed** token — usable only at that API |
+
+**The rule every resource server MUST implement:** accept a token whose `aud`
+contains **either** the shared platform host `https://grasp-daas.com` **or** your
+own `AUTH_RESOURCE_ID`. That single rule gives you:
+
+- default tokens work mesh-wide (the "normal scenario"), and
+- a client can narrow to least-privilege by requesting a specific resource — a
+  narrowed token omits the shared host, so other services reject it cleanly.
+
+Because not every service has a registered resource id yet, audience enforcement
+is **opt-in per service / per route**:
 
 | Mode | When to use | Behavior |
 | ---- | ----------- | -------- |
-| **enforced** (recommended for resource servers) | your service has a stable resource id and clients request it via `resource=` | reject (`401`) unless `aud` contains your exact resource id |
+| **enforced** (recommended for resource servers) | your service has a stable resource id | reject (`401`) unless `aud` contains the **shared host** or your **exact resource id** |
 | **off** (default-safe fallback) | early integration, or routes that legitimately accept default-audience tokens | skip the `aud` value check (signature/iss/exp still enforced) |
 
 ### 4.1 Configuration shape
@@ -123,11 +144,14 @@ per route**:
 ```
 AUTH_AUDIENCE_REQUIRED = true|false      # master switch (default false)
 AUTH_RESOURCE_ID       = "https://grasp-daas.com/api/state/v1"   # this service's id
+AUTH_SHARED_AUDIENCE   = "https://grasp-daas.com"               # mesh-wide audience
 ```
 
-- When `AUTH_AUDIENCE_REQUIRED=true`: `AUTH_RESOURCE_ID` **must** be present in
-  the token's `aud` (string or array) or the request is `401 invalid_token`
-  (`error_description="audience"`).
+- When `AUTH_AUDIENCE_REQUIRED=true`: either `AUTH_SHARED_AUDIENCE` **or**
+  `AUTH_RESOURCE_ID` **must** be present in the token's `aud` (string or array),
+  otherwise the request is `401 invalid_token` (`error_description="audience"`).
+  Accepting the shared audience is what lets a default (mesh-wide) token reach
+  your service; accepting your own id is what lets a narrowed token reach it.
 - When `false`: do not validate the `aud` *value*, but still parse it for
   logging. **Flip to `true` once your clients request your resource id** — that
   is the secure end state.
@@ -138,6 +162,63 @@ AUTH_RESOURCE_ID       = "https://grasp-daas.com/api/state/v1"   # this service'
 > `OAUTH_RESOURCE_ALLOWLIST` for the IdP to honor it in `resource=` requests
 > (otherwise tokens fall back to the default audience and enforcement would
 > reject them).
+
+### 4.2 Token pass-through across a service mesh
+
+Some services **forward the caller's bearer token unchanged** to downstream
+services instead of minting a new one. For example:
+
+```
+Client ──Bearer T──▶ AI Gateway ──Bearer T──▶ Tools API ──Bearer T──▶ state / file / config / ...
+                     (aud check)              (aud check)             (aud check each)
+```
+
+The **same token `T`** is validated at every hop, so `T` must be acceptable to
+all of them at once. Under the membership rule (§4.0) that means `T.aud` must
+contain the **shared host** `https://grasp-daas.com`.
+
+- A **default token** (client sent no `resource`) has `aud =
+  ["https://grasp-daas.com"]` → every hop accepts it. ✅ **This is the shape to
+  use for any token you intend to forward.**
+- A **narrowed token** (client sent `resource=…/ai-gateway/v1`) has `aud =
+  "…/ai-gateway/v1"` → the AI Gateway accepts it, but the Tools API rejects it
+  (neither the shared host nor `…/tools/v1` is present). ❌ Forwarding breaks at
+  the second hop — by design.
+
+**Wiring rules for a forwarding service (e.g. AI Gateway, Tools API):**
+
+1. Authenticate the inbound token with the standard middleware
+   (`AUTH_AUDIENCE_REQUIRED=true`, accept **shared host OR own `AUTH_RESOURCE_ID`**).
+2. Forward the **verified** token verbatim on the downstream call
+   (`Authorization: Bearer <same token>`). Do **not** strip or rewrite it.
+3. Propagate the request-context identity (`sub`, `cls`, `tenant_id`, `jti`) and
+   correlation/`REQUEST_ID` headers for audit continuity across hops.
+4. Never downgrade trust between hops: each downstream re-verifies signature,
+   `iss`, `exp`, and audience independently — forwarding is not a bypass.
+
+```python
+# Inside an authenticated AI Gateway / Tools API route, calling downstream.
+# `request.principal` was set by `authenticate()` (§5); `raw_token` is the
+# verified bearer string from the inbound Authorization header.
+async def call_downstream(raw_token: str, request_id: str, payload: dict):
+    headers = {
+        "Authorization": f"Bearer {raw_token}",   # forward verbatim
+        "X-Request-Id": request_id,                # audit continuity
+    }
+    # The downstream (e.g. Tools API) runs the SAME middleware and re-validates.
+    return await http.post(f"{TOOLS_API_BASE}/invoke", json=payload, headers=headers)
+```
+
+> **Trade-off (state it in your threat model):** a shared-host token is a
+> *mesh-wide* credential — every first-party API accepts it. That is what makes
+> pass-through work, but it also means audience does not constrain *which* hop a
+> forwarded token reaches. If you need hop-level least privilege (a Tools token
+> that cannot be replayed at the Gateway), use **token exchange (RFC 8693)** at
+> each hop instead of forwarding — heavier, and usually unnecessary inside a
+> trusted first-party mesh.
+>
+> **Do not request a `resource` for tokens you intend to forward** — narrowing
+> and pass-through are mutually exclusive.
 
 ---
 
@@ -152,6 +233,7 @@ from jwt import PyJWKClient, PyJWKClientError
 ISSUER = "https://auth.grasp-daas.com"                      # per env
 JWKS_URI = f"{ISSUER}/oauth/.well-known/jwks.json"
 RESOURCE_ID = "https://grasp-daas.com/api/state/v1"          # this service
+SHARED_AUDIENCE = "https://grasp-daas.com"                  # mesh-wide audience
 AUDIENCE_REQUIRED = True                                     # opt-in switch
 
 _jwks = PyJWKClient(JWKS_URI, cache_keys=True, lifespan=300)  # resolves by kid
@@ -181,7 +263,9 @@ def authenticate(token: str) -> Principal:
             "options": {"require": ["exp", "iss", "sub"]},
         }
         if AUDIENCE_REQUIRED:
-            decode_opts["audience"] = RESOURCE_ID            # enforce aud
+            # PyJWT passes if ANY listed audience is in the token's `aud`:
+            # accept the shared mesh audience OR this service's own id.
+            decode_opts["audience"] = [SHARED_AUDIENCE, RESOURCE_ID]
         else:
             decode_opts["options"]["verify_aud"] = False     # parse, don't enforce
         claims = jwt.decode(token, signing_key.key, **decode_opts)
@@ -204,6 +288,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const ISSUER = "https://auth.grasp-daas.com";                 // per env
 const RESOURCE_ID = "https://grasp-daas.com/api/state/v1";    // this service
+const SHARED_AUDIENCE = "https://grasp-daas.com";             // mesh-wide audience
 const AUDIENCE_REQUIRED = true;                               // opt-in switch
 
 const JWKS = createRemoteJWKSet(
@@ -213,7 +298,8 @@ const JWKS = createRemoteJWKSet(
 
 export async function authenticate(token) {
   const opts = { issuer: ISSUER, algorithms: ["RS256"], clockTolerance: 30 };
-  if (AUDIENCE_REQUIRED) opts.audience = RESOURCE_ID;          // enforce aud
+  // jose passes if any listed audience is present: shared mesh OR own id.
+  if (AUDIENCE_REQUIRED) opts.audience = [SHARED_AUDIENCE, RESOURCE_ID];
   let payload;
   try {
     ({ payload } = await jwtVerify(token, JWKS, opts));
@@ -244,7 +330,8 @@ fn middleware(request):
     assert claims.iss == ISSUER                    # -> 401
     assert not expired(claims, leeway=30s)         # -> 401
     if AUDIENCE_REQUIRED or route.requires_audience:
-        assert RESOURCE_ID in as_list(claims.aud)  # -> 401 audience
+        aud = as_list(claims.aud)                  # shared host OR own id
+        assert SHARED_AUDIENCE in aud or RESOURCE_ID in aud   # -> 401 audience
     if claims.cls not in {"user","app"}:           # -> 401
     principal = {
         kind: claims.cls,
@@ -267,6 +354,8 @@ fn middleware(request):
   token for tenant A must never read tenant B.
 - **Leaving audience off forever.** "Off" is a migration state, not the end
   state. Register your resource id, get clients to request it, then enforce.
+- **Accepting *only* your own resource id when enforcing.** You'd reject every
+  default (mesh-wide) token. Always accept the shared host **or** your id.
 - **Rejecting both `cls` kinds with the same code path that only handles one.**
   Apps and users are both legitimate; design for both from day one.
 - **Returning `5xx` for invalid tokens.** Bad token → `401`; authenticated but
@@ -284,7 +373,11 @@ fn middleware(request):
 - [ ] Normalize principal `{kind, id=sub, tenant_id=rsc.split(":")[0], roles}`.
 - [ ] Scope all data/authz to `tenant_id`; cross-tenant impossible from token.
 - [ ] Audience: register `AUTH_RESOURCE_ID` on the IdP allowlist, have clients
-      request it, then set `AUTH_AUDIENCE_REQUIRED=true`.
+      request it, then set `AUTH_AUDIENCE_REQUIRED=true`. When enforcing, accept
+      the **shared host OR** your resource id (membership test).
+- [ ] If you **forward** the caller's token downstream (gateway/mesh, §4.2): pass
+      the verified `Bearer` token verbatim, propagate `X-Request-Id`, and rely on
+      shared-host (default) tokens — never request a `resource` for forwarded tokens.
 - [ ] Defer permissions to the entitlement server keyed by `(tenant_id, kind, sub)`.
 - [ ] `401` for bad token, `403` for not-allowed; never `5xx`.
 - [ ] Log `jti`, `cls`, `sub`, `tenant_id`, route for audit.

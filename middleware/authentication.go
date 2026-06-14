@@ -25,18 +25,33 @@ import (
 )
 
 type authConfig struct {
-	audience string // "" = disabled
-	useJWKS  bool   // true = resolve keys by kid from live JWKS
+	audience       string // this service's resource id ("" = audience check disabled)
+	sharedAudience string // additionally-accepted mesh-wide audience ("" = none)
+	useJWKS        bool   // true = resolve keys by kid from live JWKS
 }
 
 // AuthOption configures AuthenticationMiddleware.
 type AuthOption func(*authConfig)
 
-// WithAudience enables the RFC 8707 audience-confusion defence: a verified token
-// is rejected unless its `aud` contains resource. Pass the service's exact
-// resource id (== ResourceMetadata.Resource). Omit to disable (default).
+// WithAudience enables the RFC 8707 audience-confusion defence: once enabled, a
+// verified token is accepted only if its `aud` contains an accepted audience
+// (set-membership test). Pass the service's exact resource id
+// (== ResourceMetadata.Resource); this value also drives the RFC 9728
+// resource_metadata challenge on 401s. Omit to disable the audience check
+// (default).
+//
+// Combine with WithSharedAudience to also accept the mesh-wide default audience,
+// per the auth contract's "shared host OR own resource id" rule.
 func WithAudience(resource string) AuthOption {
 	return func(a *authConfig) { a.audience = resource }
+}
+
+// WithSharedAudience additionally accepts the mesh-wide shared audience (e.g.
+// "https://grasp-daas.com") so default tokens minted without a specific
+// `resource=` request still reach this service. It does not, on its own, drive
+// the resource_metadata challenge — pair it with WithAudience(resourceID).
+func WithSharedAudience(shared string) AuthOption {
+	return func(a *authConfig) { a.sharedAudience = shared }
 }
 
 // WithJWKS enables key-rotation-safe verification: instead of pinning a single
@@ -175,10 +190,16 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				return false, WrapErr(c, "unauthorized")
 			}
 
-			// Audience check (RFC 8707) — only when enabled via WithAudience.
-			if ac.audience != "" && !slices.Contains(claims.Aud, ac.audience) {
-				logger.Error(c.Request().Context(), "token aud %v missing resource %s", claims.Aud, ac.audience)
-				return false, WrapErr(c, "unauthorized")
+			// Audience check (RFC 8707) — only when enabled (WithAudience and/or
+			// WithSharedAudience). Set-membership: accept if `aud` contains this
+			// service's resource id OR the mesh-wide shared audience.
+			if ac.audience != "" || ac.sharedAudience != "" {
+				accepted := (ac.audience != "" && slices.Contains(claims.Aud, ac.audience)) ||
+					(ac.sharedAudience != "" && slices.Contains(claims.Aud, ac.sharedAudience))
+				if !accepted {
+					logger.Error(c.Request().Context(), "token aud %v missing resource %q / shared %q", claims.Aud, ac.audience, ac.sharedAudience)
+					return false, WrapErr(c, "unauthorized")
+				}
 			}
 
 			// Build the normalized principal (kind/id/tenant/roles/jti).
