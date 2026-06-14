@@ -10,10 +10,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/claims"
 )
 
 func newAuthzTestClaims() *claims.Context {

@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/adapters"
 )
 
 const testResource = "https://grasp-daas.com/api/test-svc/v1"

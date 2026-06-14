@@ -5,8 +5,8 @@ import (
 	"time"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/interfaces"
 )
 
 // sendEventAsync fires a Kafka event in a detached goroutine so it never

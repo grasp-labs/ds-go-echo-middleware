@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware"
 )
 
 func TestAPIKeyMiddleware_EmptyValidKeys(t *testing.T) {

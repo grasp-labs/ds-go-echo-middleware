@@ -3,7 +3,7 @@ package requestctx
 import (
 	"context"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/claims"
 )
 
 var userContextKey ctxKey = "userContext"

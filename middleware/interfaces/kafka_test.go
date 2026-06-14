@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/adapters"
 )
 
 // mockProducer implements interfaces.Producer

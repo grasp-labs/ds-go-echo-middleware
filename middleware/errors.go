@@ -6,7 +6,7 @@ import (
 	errCode "github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/enum/errors"
 	httpErr "github.com/grasp-labs/ds-go-commonmodels/v3/commonmodels/http_error"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/requestctx"
 )
 
 const DefaultLocal string = "en"
