@@ -3,7 +3,7 @@ package middleware
 import (
 	"strings"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/requestctx"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/text/language"
 )

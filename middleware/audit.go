@@ -13,11 +13,11 @@ import (
 	"github.com/labstack/echo/v4"
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
-	ctx "github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/claims"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/interfaces"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/adapters"
+	ctx "github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/claims"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/requestctx"
 )
 
 // -------- helpers --------

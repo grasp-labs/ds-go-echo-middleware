@@ -15,10 +15,10 @@ import (
 
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/fakes"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/internal/utils"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware"
-	"github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/adapters"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/internal/fakes"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/internal/utils"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/adapters"
 )
 
 func TestAuditMiddleware_BasicFlow(t *testing.T) {

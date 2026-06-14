@@ -1,6 +1,6 @@
 # Contract: OAuth Protected Resource discovery in `ds-go-echo-middleware`
 
-**Status:** proposed — to be implemented in `github.com/grasp-labs/ds-go-echo-middleware/v2`.
+**Status:** proposed — to be implemented in `github.com/grasp-labs/ds-go-echo-middleware/v3`.
 **Consumers:** every Grasp EKS API service (`ai-gateway`, `state`, `file`, `config`, …).
 **Implements:** RFC 9728 (Protected Resource Metadata), RFC 6750 §3 (the `WWW-Authenticate`
 challenge), RFC 8707 (audience binding / audience-confusion defence).

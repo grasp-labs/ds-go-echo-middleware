@@ -99,7 +99,7 @@ After authentication, a normalized principal is available on the request
 `context.Context` — framework-agnostic, so service/repo layers can read it too:
 
 ```go
-import "github.com/grasp-labs/ds-go-echo-middleware/v2/middleware/requestctx"
+import "github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/requestctx"
 
 func handler(c echo.Context) error {
 	p, ok := requestctx.GetPrincipal(c.Request().Context())
