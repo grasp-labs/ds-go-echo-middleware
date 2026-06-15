@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,7 +14,7 @@ import (
 type Context struct {
 	Iss string    `json:"iss"` // Issuer
 	Sub string    `json:"sub"` // Subject
-	Aud []string  `json:"aud"` // Audience
+	Aud []string  `json:"aud"` // Audience (accepts JSON string or string[]; see UnmarshalJSON)
 	Exp float64   `json:"exp"` // Expiration time timestamp
 	Nbf float64   `json:"nbf"` // Not before timestamp
 	Iat float64   `json:"iat"` // Issued At
@@ -23,6 +24,37 @@ type Context struct {
 	Cls string   `json:"cls"` // Classification (user or app)
 	Rsc string   `json:"rsc"` // Resource (tenantId:tenantName)
 	Rol []string `json:"rol"` // Roles (array of strings)
+}
+
+// UnmarshalJSON normalizes the `aud` claim, which per RFC 7519 §4.1.3 may be
+// encoded as either a single string or an array of strings, into Aud []string.
+// All other fields decode normally.
+func (c *Context) UnmarshalJSON(data []byte) error {
+	type alias Context // avoid recursing into this method
+	aux := struct {
+		Aud json.RawMessage `json:"aud"`
+		*alias
+	}{alias: (*alias)(c)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	c.Aud = nil
+	if len(aux.Aud) == 0 || string(aux.Aud) == "null" {
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(aux.Aud, &arr); err == nil {
+		c.Aud = arr
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(aux.Aud, &s); err != nil {
+		return fmt.Errorf("aud claim is neither string nor string array: %w", err)
+	}
+	c.Aud = []string{s}
+	return nil
 }
 
 func (c Context) GetTenantId() (uuid.UUID, error) {

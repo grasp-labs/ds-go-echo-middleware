@@ -236,6 +236,34 @@ func TestAuthN_401ChallengePointsAtResourceMetadataWhenAudienceSet(t *testing.T)
 	assert.Equal(t, want, rec.Header().Get("WWW-Authenticate"))
 }
 
+// ---------- aud as a single string (RFC 7519 §4.1.3) ----------
+
+func TestAuthN_AcceptsStringAudience(t *testing.T) {
+	priv, pubPEM, err := fakes.GenerateRSAPairPEM()
+	require.NoError(t, err)
+	e := newAuthApp(t, pubPEM, testIssuer, middleware.WithAudience(testResource))
+
+	now := time.Now()
+	// aud is a single JSON string, not an array — must still parse and match.
+	claims := jwt.MapClaims{
+		"iss": testIssuer,
+		"sub": "u@example.com",
+		"cls": "user",
+		"aud": testResource, // string, not []string
+		"exp": float64(now.Add(time.Hour).Unix()),
+		"nbf": float64(now.Add(-time.Minute).Unix()),
+		"iat": float64(now.Add(-time.Minute).Unix()),
+		"rsc": uuid.New().String() + ":tenant",
+		"jti": uuid.New().String(),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	signed, err := tok.SignedString(priv)
+	require.NoError(t, err)
+
+	rec := doGet(t, e, "/protected/", signed)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
 // ---------- shared (mesh-wide) audience ----------
 
 const testSharedAudience = "https://grasp-daas.com"
