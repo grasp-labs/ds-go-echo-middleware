@@ -50,6 +50,7 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			req := c.Request()
+			reqCtx := c.Request().Context()
 
 			var payload json.RawMessage
 
@@ -146,7 +147,7 @@ func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				},
 			}
 
-			sendEventAsync(producer, logger, topic, event, "audit.log")
+			sendEventAsync(reqCtx, producer, logger, topic, event, "audit.log")
 
 			return callErr
 		}

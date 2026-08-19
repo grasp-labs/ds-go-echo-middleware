@@ -248,10 +248,11 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				},
 			}
 
-			sendEventAsync(producer, logger, topic, event, "login.success")
+			sendEventAsync(ctx, producer, logger, topic, event, "login.success")
 			return true, nil
 		},
 		ErrorHandler: func(handlerErr error, c echo.Context) error {
+			reqCtx := c.Request().Context()
 			logger.Error(c.Request().Context(), "Jwt error: %v", handlerErr)
 
 			// Attach the RFC 6750 challenge to the 401. When this service has a
@@ -286,7 +287,7 @@ func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, p
 				},
 			}
 
-			sendEventAsync(producer, logger, topic, event, "login.failure")
+			sendEventAsync(reqCtx, producer, logger, topic, event, "login.failure")
 
 			return echo.ErrUnauthorized
 		},

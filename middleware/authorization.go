@@ -192,7 +192,7 @@ func errorHandler(
 		},
 	}
 
-	sendEventAsync(producer, logger, topic, event, eventType)
+	sendEventAsync(ctx, producer, logger, topic, event, eventType)
 
 	switch status_code {
 	// Allow consumers to handle bad gateway errors gracefully

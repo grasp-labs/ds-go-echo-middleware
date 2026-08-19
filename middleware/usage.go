@@ -79,7 +79,7 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 				},
 			}
 
-			sendEventAsync(producer, logger, topic, event, "usage.report")
+			sendEventAsync(request.Context(), producer, logger, topic, event, "usage.report")
 
 			return callErr
 		}
