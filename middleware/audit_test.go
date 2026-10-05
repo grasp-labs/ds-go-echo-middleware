@@ -3,9 +3,11 @@ package middleware_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -299,6 +301,50 @@ func TestAuditMiddleware_ErrorResponse_CapturesResponseBody(t *testing.T) {
 	} else {
 		t.Fatal("response_payload should be json.RawMessage")
 	}
+}
+
+func runAudit(t *testing.T, body []byte, status int, opts ...middleware.AuditOption) (map[string]any, []byte) {
+	t.Helper()
+	e := echo.New()
+	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", uuid.New(), 1024)
+	logger := &fakes.MockLogger{}
+	mock := &fakes.MockProducer{}
+
+	e.Use(middleware.RequestIDMiddleware(logger))
+	e.Use(middleware.AuditMiddleware(cfg, logger, &adapters.ProducerAdapter{Producer: mock}, "test_topic", opts...))
+
+	var seen []byte
+	e.POST("/query/", func(c echo.Context) error {
+		c.Set("userContext", fakes.NewTestUserContext("user@email.com", uuid.New().String()+":MockName"))
+		seen, _ = io.ReadAll(c.Request().Body)
+		return c.JSONBlob(status, seen)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/query/", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, status, rec.Code)
+	assert.Equal(t, body, rec.Body.Bytes())
+	assert.True(t, mock.WaitForSend(time.Second))
+	return *mock.Value().(sdkmodels.EventJson).Payload.(*map[string]any), seen
+}
+
+func TestAuditMiddleware_WithRequestPayload(t *testing.T) {
+	body := []byte(`{"sql":"select 1"}`)
+	p, _ := runAudit(t, body, http.StatusOK, middleware.WithRequestPayload(func(_ echo.Context, b []byte) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"bytes":%d}`, len(b)))
+	}))
+	assert.JSONEq(t, fmt.Sprintf(`{"bytes":%d}`, len(body)), string(p["payload"].(json.RawMessage)))
+}
+
+func TestAuditMiddleware_OversizedBody_PassedThroughNotAudited(t *testing.T) {
+	body := []byte(`{"sql":"` + strings.Repeat("x", 100) + `"}`)
+	p, seen := runAudit(t, body, http.StatusBadRequest, middleware.WithMaxBodyBytes(32))
+	assert.Equal(t, body, seen)
+	assert.Nil(t, p["payload"])
+	assert.Nil(t, p["response_payload"], "truncated error response is not valid JSON")
 }
 
 func TestAuditMiddleware_ServerError_CapturesResponseBody(t *testing.T) {
