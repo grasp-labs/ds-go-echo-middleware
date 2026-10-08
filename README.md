@@ -37,6 +37,7 @@ See [docs/middleware-guide.md](./docs/middleware-guide.md) for how to use Middle
 
 ### 🧾 Usage Middleware
 
+- Skips billing usage when a handler returns an error or an HTTP status of 400 or higher.
 - Emits usage entry logs to Kafka for the purpose of billing usage. Captures RequestID, TenantID, used Memory and Time. Support X-OwnerID header for cost allocation.
 
 ### 📤 Kafka Integration

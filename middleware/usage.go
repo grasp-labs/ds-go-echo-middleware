@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,7 +17,7 @@ import (
 	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/requestctx"
 )
 
-// UsageMiddleware returns an Echo middleware that emits usage report to Kafka.
+// UsageMiddleware reports usage to Kafka unless the handler returns an error or HTTP status >= 400.
 func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -25,6 +26,9 @@ func UsageMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *
 
 			// Call the actual handler
 			callErr := next(c)
+			if callErr != nil || c.Response().Status >= http.StatusBadRequest {
+				return callErr
+			}
 
 			// Retrieve user context
 			claims, ok := c.Get("userContext").(*ctx.Context)
