@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -169,4 +170,112 @@ func TestUsageMiddleware_MissingUserContext(t *testing.T) {
 	// but still allows the request to proceed (doesn't send to producer)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.False(t, mock.Called(), "Producer should not have been called when user context is missing")
+}
+
+func TestUsageMiddleware_ResponseOutcome(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		status     int
+		err        error
+		wantStatus int
+		wantUsage  bool
+	}{
+		{
+			name:       "ok",
+			status:     http.StatusOK,
+			wantStatus: http.StatusOK,
+			wantUsage:  true,
+		},
+		{
+			name:       "created",
+			status:     http.StatusCreated,
+			wantStatus: http.StatusCreated,
+			wantUsage:  true,
+		},
+		{
+			name:       "no content",
+			status:     http.StatusNoContent,
+			wantStatus: http.StatusNoContent,
+			wantUsage:  true,
+		},
+		{
+			name:       "redirect",
+			status:     http.StatusFound,
+			wantStatus: http.StatusFound,
+			wantUsage:  true,
+		},
+		{
+			name:       "unauthorized",
+			status:     http.StatusUnauthorized,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "forbidden",
+			status:     http.StatusForbidden,
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "not found",
+			status:     http.StatusNotFound,
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "validation",
+			status:     http.StatusUnprocessableEntity,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name:       "internal error",
+			status:     http.StatusInternalServerError,
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "unavailable",
+			status:     http.StatusServiceUnavailable,
+			wantStatus: http.StatusServiceUnavailable,
+		},
+		{
+			name:       "returned HTTP error",
+			err:        echo.ErrForbidden,
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "returned error",
+			err:        errors.New("handler failed"),
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "error after response",
+			status:     http.StatusOK,
+			err:        errors.New("write failed"),
+			wantStatus: http.StatusOK,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			cfg := fakes.NewConfig("dp", "core", "usage-test", "v1.0.0", uuid.New(), 1024)
+			producer := &fakes.MockProducer{}
+			e.Use(middleware.UsageMiddleware(cfg, &fakes.MockLogger{}, &adapters.ProducerAdapter{
+				Producer: producer,
+			}, "usage"))
+			e.GET("/", func(c echo.Context) error {
+				c.Set("userContext", fakes.NewTestUserContext("user@example.com", uuid.NewString()+":Test"))
+				if tt.status != 0 {
+					if err := c.NoContent(tt.status); err != nil {
+						return err
+					}
+				}
+				return tt.err
+			})
+
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			if tt.wantUsage {
+				assert.True(t, producer.WaitForSend(time.Second), "successful requests must report usage")
+			} else {
+				assert.False(t, producer.WaitForSend(50*time.Millisecond), "failed requests must not report usage")
+			}
+		})
+	}
 }
