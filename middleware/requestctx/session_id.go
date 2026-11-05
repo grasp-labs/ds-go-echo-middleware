@@ -8,13 +8,13 @@ import (
 
 const sessionIDKey ctxKey = "session_id"
 
-// GetSessionID returns the request ID from context.
+// GetSessionID returns the session ID from context.
 func GetSessionID(ctx context.Context) string {
 	val, _ := ctx.Value(sessionIDKey).(string)
 	return val
 }
 
-// SetSessionID sets the request ID in the context.
+// SetSessionID sets the session ID in context.
 func SetSessionID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, sessionIDKey, id)
 }

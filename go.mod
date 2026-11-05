@@ -1,6 +1,6 @@
 module github.com/grasp-labs/ds-go-echo-middleware/v3
 
-go 1.25.0
+go 1.27.3
 
 require (
 	github.com/allegro/bigcache/v3 v3.1.0
@@ -11,10 +11,13 @@ require (
 	github.com/labstack/echo/v4 v4.15.3
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/text v0.38.0
+	gorm.io/gorm v1.31.2
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.18.3 // indirect
 	github.com/labstack/gommon v0.5.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect

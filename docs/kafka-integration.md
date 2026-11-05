@@ -16,6 +16,7 @@ type Producer interface {
 ## 📦 producer.go (Example implementation)
 
 Full example of what a Kafka Producer might look like. Notice the `Send` and `Close` methods of the `Producer`struct.
+The example uses the shared slog logger installed by the [logging setup](middleware-guide.md#logging).
 
 ```go
 package kafka
@@ -23,8 +24,8 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
-	"github.com/grasp-labs/ds-health/api/internal/logctx"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -42,7 +43,7 @@ type Producer struct {
 //
 // Return Producer struct.
 func NewProducer(c context.Context, brokers []string, topic string) *Producer {
-	logctx.Info(c, "Configuring new producer for %s, %s", brokers, topic)
+	slog.InfoContext(c, "Configuring new producer", "brokers", brokers, "topic", topic)
 	writer := kafka.NewWriter(kafka.WriterConfig{
 		Brokers:      brokers,
 		Topic:        topic,
@@ -62,7 +63,7 @@ func NewProducer(c context.Context, brokers []string, topic string) *Producer {
 //
 // Returns an error if the message could not be marshaled or written to the Kafka topic.
 func (p *Producer) Send(ctx context.Context, key string, value any) error {
-	logctx.Info(ctx, "Sending message to topic %s with key %s.", p.writer.Topic, key)
+	slog.InfoContext(ctx, "Sending message to Kafka", "topic", p.writer.Topic, "key", key)
 	msgBytes, err := json.Marshal(value)
 	if err != nil {
 		return err
