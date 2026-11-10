@@ -81,6 +81,12 @@ func (w *responseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
+// Flush keeps the wrapper an http.Flusher so streaming (SSE) handlers that
+// type-assert the writer keep working.
+func (w *responseWriter) Flush() {
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
+}
+
 // AuditMiddleware emits audit logs to Kafka.
 // It reads/restores the body ONLY for JSON requests on mutating methods.
 func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter, topic string, opts ...AuditOption) echo.MiddlewareFunc {

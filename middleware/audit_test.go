@@ -170,6 +170,34 @@ func TestAuditMiddleware_NonJSON_DoesNotDrainBody(t *testing.T) {
 	}
 }
 
+func TestAuditMiddleware_WrappedWriterFlushes(t *testing.T) {
+	e := echo.New()
+
+	cfg := fakes.NewConfig("dp", "core", "fake", "v1.0.0-alpha.1", uuid.New(), 1024)
+	logger := &fakes.MockLogger{}
+	producer := &adapters.ProducerAdapter{Producer: &fakes.MockProducer{}}
+
+	e.Use(middleware.AuditMiddleware(cfg, logger, producer, "test_topic"))
+
+	var isFlusher bool
+	e.GET("/stream", func(c echo.Context) error {
+		c.Set("userContext", fakes.NewTestUserContext("user@email.com", uuid.New().String()+":MockName"))
+		f, ok := c.Response().Writer.(http.Flusher)
+		isFlusher = ok
+		c.Response().WriteHeader(http.StatusOK)
+		if ok {
+			f.Flush()
+		}
+		return nil
+	})
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/stream", nil))
+
+	assert.True(t, isFlusher, "wrapped writer must implement http.Flusher")
+	assert.True(t, rec.Flushed, "Flush must reach the underlying writer")
+}
+
 func TestAuditMiddleware_SuccessResponse_NoResponseBody(t *testing.T) {
 	e := echo.New()
 
