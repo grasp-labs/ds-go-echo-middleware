@@ -13,34 +13,23 @@ const (
 	headerSessionID = "X-Session-ID"
 )
 
-// RequestIDMiddleware sets X-Request-ID if missing, and propagates it.
-// SessionID is propagated if valid; if invalid/missing, we leave it unset (adjust if you want to synthesize one).
+// RequestIDMiddleware propagates valid request and session UUIDs in canonical
+// lowercase form, generating UUIDs for missing or invalid values.
 func RequestIDMiddleware(logger interfaces.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			req := c.Request()
 			res := c.Response()
 
-			// Request ID: ensure valid UUID
-			requestID := req.Header.Get(headerRequestID)
-			if _, err := uuid.Parse(requestID); err != nil || requestID == "" {
-				requestID = uuid.New().String()
-			}
+			requestID := normalizeOrNewUUID(req.Header.Get(headerRequestID))
+			sessionID := normalizeOrNewUUID(req.Header.Get(headerSessionID))
 
-			// Session ID: propagate always
-			sessionID := req.Header.Get(headerSessionID)
-			if _, err := uuid.Parse(sessionID); err != nil || sessionID == "" {
-				sessionID = uuid.New().String()
-			}
-
-			// Put IDs into context (preserve previously set values)
 			ctx := requestctx.SetRequestID(req.Context(), requestID)
 			if sessionID != "" {
 				ctx = requestctx.SetSessionID(ctx, sessionID)
 			}
 			c.SetRequest(req.WithContext(ctx))
 
-			// Expose via response headers
 			res.Header().Set(headerRequestID, requestID)
 			if sessionID != "" {
 				res.Header().Set(headerSessionID, sessionID)
@@ -49,4 +38,14 @@ func RequestIDMiddleware(logger interfaces.Logger) echo.MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+func normalizeOrNewUUID(value string) string {
+	id, err := uuid.Parse(value)
+	// Validate checks the wrapper characters that Parse skips.
+	if err != nil || uuid.Validate(value) != nil {
+		return uuid.NewString()
+	}
+	// Use the same lowercase, hyphenated ID in headers and logs for every accepted spelling.
+	return id.String()
 }
