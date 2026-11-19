@@ -9,10 +9,10 @@ Requires Go 1.27.3 or newer.
 This module is published at major version **v3** (the path includes `/v3`):
 
 ```bash
-go get github.com/grasp-labs/ds-go-echo-middleware/v3@<version>
+go get github.com/grasp-labs/ds-go-echo-middleware/v3@latest
 ```
 
-Choose a published release containing the logging APIs below. This will:
+This will:
 
 - Add the dependency to your `go.mod`
 - Download the module from GitHub
@@ -35,6 +35,7 @@ import (
 
 	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware"
 	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/logctx"
+	"github.com/labstack/echo/v4"
 )
 
 logger := logctx.New(os.Stdout)
@@ -42,6 +43,7 @@ slog.SetDefault(logger)
 legacyLogger := logctx.Adapter{Logger: logger}
 
 e := echo.New()
+e.IPExtractor = echo.ExtractIPDirect()
 
 // Build the authentication middleware (returns an error if the key/issuer is invalid).
 authMW, err := middleware.AuthenticationMiddleware(cfg, legacyLogger, publicKeyPEM, producer, complianceTopic)
@@ -60,6 +62,9 @@ e.Use(middleware.AuditMiddleware(cfg, legacyLogger, producer, auditTopic))
 
 Register request IDs, logging, and recovery globally before CORS and route middleware
 so public endpoints, missing routes, preflights, and rejected requests receive logs.
+The extractor above records the direct peer. For deployments that use a proxy to
+supply the client IP, configure Echo v4's extractor for your trusted proxy ranges.
+See the [Echo IP address guide](https://echo.labstack.com/guide/ip-address/).
 
 ### Current middleware signatures
 
@@ -151,11 +156,13 @@ logger := slog.New(logctx.NewHandler(handler))
 Use `adapter/gormlog` from this module when opening the database:
 
 ```go
+gormlog.HideScanParameters()
 db, err := gorm.Open(dialector, &gorm.Config{Logger: gormlog.New(logger)})
 ```
 
 Defaults log errors and queries slower than 200 ms, ignore record-not-found
-errors, and hide bound parameters. To override them, modify GORM's native config:
+errors, and hide bound parameters in ordinary queries. Modify GORM's native
+config to override these defaults.
 
 ```go
 sqlConfig := gormlog.DefaultConfig()
@@ -164,10 +171,11 @@ sqlLogger := gormlog.NewWithConfig(logger, sqlConfig)
 ```
 
 `NewWithConfig` uses the complete config, including zero and `false` values.
-The slog handler controls formatting; GORM's `Colorful` setting is unused.
-Call either constructor before queries run. The first call replaces GORM's process-wide
-recorder filter to hide `Scan` parameters regardless of `ParameterizedQueries`, which
-controls ordinary queries. This does not change parameters sent to the database.
+The slog handler controls formatting. GORM's `Colorful` setting is unused.
+Call `HideScanParameters` once during application startup, before any GORM queries
+run. It replaces GORM's process-wide recorder filter to omit bound values from
+`Scan` SQL logs. Applications that already own a recorder filter can omit bound
+values there. `ParameterizedQueries` controls ordinary queries.
 Use `db.WithContext(ctx)` so SQL records share request or job correlation fields.
 
 ## 🧪 Optional: Local Replace for Development

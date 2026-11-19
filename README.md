@@ -23,7 +23,7 @@ for the shared logger, existing logger adapter, and service configuration option
 ### 🧠 Request ID Middleware
 
 - Normalizes request and session IDs to lowercase UUIDs in response headers and request context; generates UUIDv4 IDs when missing or invalid.
-- Makes request tracing easy across services and middleware.
+- Makes request tracing easy across services and middleware. 
 - Should be the first middleware in the stack to run.
 
 ### 🔑 JWT Authentication Middleware
@@ -78,8 +78,9 @@ See [docs/interface-example-config.md](./docs/interface-example-config.md) for e
 To execute all tests recursively, call
 
 ```bash
-go test ./...
+go test ./... 
 ```
+
 
 To execute test in single directory, call
 

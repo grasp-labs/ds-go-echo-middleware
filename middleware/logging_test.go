@@ -76,7 +76,9 @@ func TestRequestLoggerUsesFinalStatus(t *testing.T) {
 	var output bytes.Buffer
 	e := echo.New()
 	e.Use(mw.RequestLogger(logctx.New(&output)))
+	var errorHandlerCalls int
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		errorHandlerCalls++
 		if !c.Response().Committed {
 			require.NoError(t, c.NoContent(http.StatusServiceUnavailable))
 		}
@@ -86,6 +88,7 @@ func TestRequestLoggerUsesFinalStatus(t *testing.T) {
 	e.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
 
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	require.Equal(t, 1, errorHandlerCalls)
 	entries := testlog.Read(t, &output)
 	require.Len(t, entries, 1)
 	require.Equal(t, float64(http.StatusServiceUnavailable), entries[0]["status"])

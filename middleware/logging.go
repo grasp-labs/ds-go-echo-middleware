@@ -11,9 +11,10 @@ import (
 
 // RequestLogger logs one completion event after the response status is known.
 // Register it before Recover and middleware that may return early.
+// It handles returned errors through Echo's centralized error handler.
 // Use a logctx handler to include request and principal fields.
 func RequestLogger(logger *slog.Logger) echo.MiddlewareFunc {
-	return middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+	logRequest := middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		HandleError:      true,
 		LogLatency:       true,
 		LogProtocol:      true,
@@ -55,6 +56,15 @@ func RequestLogger(logger *slog.Logger) echo.MiddlewareFunc {
 			return nil
 		},
 	})
+
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		handle := logRequest(next)
+		return func(c echo.Context) error {
+			// Echo's request logger returns the error even after handling it.
+			_ = handle(c)
+			return nil
+		}
+	}
 }
 
 // Recover logs panics and returns errors to the outer RequestLogger.

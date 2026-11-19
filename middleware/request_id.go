@@ -21,19 +21,20 @@ func RequestIDMiddleware(logger interfaces.Logger) echo.MiddlewareFunc {
 			req := c.Request()
 			res := c.Response()
 
+			// Request ID: ensure valid UUID
 			requestID := normalizeOrNewUUID(req.Header.Get(headerRequestID))
+
+			// Session ID: propagate always
 			sessionID := normalizeOrNewUUID(req.Header.Get(headerSessionID))
 
+			// Put IDs into context (preserve previously set values)
 			ctx := requestctx.SetRequestID(req.Context(), requestID)
-			if sessionID != "" {
-				ctx = requestctx.SetSessionID(ctx, sessionID)
-			}
+			ctx = requestctx.SetSessionID(ctx, sessionID)
 			c.SetRequest(req.WithContext(ctx))
 
+			// Expose via response headers
 			res.Header().Set(headerRequestID, requestID)
-			if sessionID != "" {
-				res.Header().Set(headerSessionID, sessionID)
-			}
+			res.Header().Set(headerSessionID, sessionID)
 
 			return next(c)
 		}

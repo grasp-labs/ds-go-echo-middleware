@@ -2,6 +2,7 @@ package gormlog
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,9 +18,21 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-func TestScanRecorderHidesBoundValues(t *testing.T) {
+func TestScanRecorderRedactionRequiresExplicitSetup(t *testing.T) {
+	previousFilter := gormlogger.RecorderParamsFilter
+	t.Cleanup(func() { gormlogger.RecorderParamsFilter = previousFilter })
+	gormlogger.RecorderParamsFilter = func(_ context.Context, sql string, params ...any) (string, []any) {
+		return sql, params
+	}
+
 	New(slog.Default())
-	sql, params := gormlogger.Recorder.New().ParamsFilter(t.Context(), "SELECT ?", "private-value")
+	recorder := gormlogger.Recorder.New()
+	sql, params := recorder.ParamsFilter(t.Context(), "SELECT ?", "private-value")
+	require.Equal(t, "SELECT ?", sql)
+	require.Equal(t, []any{"private-value"}, params)
+
+	HideScanParameters()
+	sql, params = recorder.ParamsFilter(t.Context(), "SELECT ?", "private-value")
 	require.Equal(t, "SELECT ?", sql)
 	require.Empty(t, params)
 }
@@ -132,6 +145,30 @@ func TestCustomConfigLeavesDefaultsUnchanged(t *testing.T) {
 		records := testlog.Read(t, &output)
 		require.Len(t, records, 1)
 		require.Equal(t, "WARN", records[0]["level"])
+	})
+}
+
+func TestErrorModeSuppressesSlowQueryWarnings(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var output bytes.Buffer
+		log := logctx.New(&output)
+		config := DefaultConfig()
+		config.LogLevel = gormlogger.Error
+		for _, logger := range []gormlogger.Interface{
+			NewWithConfig(log, config),
+			New(log).LogMode(gormlogger.Error),
+		} {
+			slowStart := time.Now().Add(-time.Second)
+			query := func() (string, int64) { return "SELECT 1", 1 }
+			logger.Trace(t.Context(), slowStart, query, nil)
+			require.Empty(t, output.String())
+
+			logger.LogMode(gormlogger.Warn).Trace(t.Context(), slowStart, query, nil)
+			records := testlog.Read(t, &output)
+			require.Len(t, records, 1)
+			require.Equal(t, "WARN", records[0]["level"])
+			output.Reset()
+		}
 	})
 }
 
