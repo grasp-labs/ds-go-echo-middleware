@@ -12,11 +12,17 @@ Reusable middleware components for Go applications using Echo — including stru
 
 See [docs/middleware-guide.md](./docs/middleware-guide.md) for how to use Middleware.
 
+## Logging
+
+Shared JSON logging includes request and job correlation, HTTP completion and
+panic logs, and GORM query logging. See the [logging setup](docs/middleware-guide.md#logging)
+for the shared logger, existing logger adapter, and service configuration options.
+
 ## 🚀 Features
 
 ### 🧠 Request ID Middleware
 
-- Injects a UUIDv4 X-Request-ID into headers and request context if not present.
+- Normalizes request and session IDs to lowercase UUIDs in response headers and request context; generates UUIDv4 IDs when missing or invalid.
 - Makes request tracing easy across services and middleware. 
 - Should be the first middleware in the stack to run.
 

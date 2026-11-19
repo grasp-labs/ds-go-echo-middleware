@@ -4,10 +4,12 @@ How to install and use the `ds-go-echo-middleware` package in another Go project
 
 ## ✅ 1. Install via go get
 
+Requires Go 1.27.3 or newer.
+
 This module is published at major version **v3** (the path includes `/v3`):
 
 ```bash
-go get github.com/grasp-labs/ds-go-echo-middleware/v3@v3.0.0
+go get github.com/grasp-labs/ds-go-echo-middleware/v3@latest
 ```
 
 This will:
@@ -28,28 +30,48 @@ In your Echo project:
 
 ```go
 import (
+	"log/slog"
+	"os"
+
 	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/logctx"
+	"github.com/labstack/echo/v4"
 )
 
+logger := logctx.New(os.Stdout)
+slog.SetDefault(logger)
+legacyLogger := logctx.Adapter{Logger: logger}
+
 e := echo.New()
+e.IPExtractor = echo.ExtractIPDirect()
 
 // Build the authentication middleware (returns an error if the key/issuer is invalid).
-authMW, err := middleware.AuthenticationMiddleware(cfg, logger, publicKeyPEM, producer, complianceTopic)
+authMW, err := middleware.AuthenticationMiddleware(cfg, legacyLogger, publicKeyPEM, producer, complianceTopic)
 if err != nil {
 	log.Fatal(err)
 }
 
 // Apply middleware
-e.Use(middleware.RequestIDMiddleware(logger))
+e.Use(middleware.RequestIDMiddleware(legacyLogger))
+e.Use(middleware.RequestLogger(logger))
+e.Use(middleware.Recover(logger))
 e.Use(authMW)
-e.Use(middleware.AuthorizationMiddleware(cfg, logger, roles, entitlementURL, producer, complianceTopic))
-e.Use(middleware.AuditMiddleware(cfg, logger, producer, auditTopic))
+e.Use(middleware.AuthorizationMiddleware(cfg, legacyLogger, roles, entitlementURL, producer, complianceTopic))
+e.Use(middleware.AuditMiddleware(cfg, legacyLogger, producer, auditTopic))
 ```
+
+Register request IDs, logging, and recovery globally before CORS and route middleware
+so public endpoints, missing routes, preflights, and rejected requests receive logs.
+The extractor above records the direct peer. For deployments that use a proxy to
+supply the client IP, configure Echo v4's extractor for your trusted proxy ranges.
+See the [Echo IP address guide](https://echo.labstack.com/guide/ip-address/).
 
 ### Current middleware signatures
 
 ```go
 func RequestIDMiddleware(logger interfaces.Logger) echo.MiddlewareFunc
+func RequestLogger(logger *slog.Logger) echo.MiddlewareFunc
+func Recover(logger *slog.Logger) echo.MiddlewareFunc
 func AuthenticationMiddleware(cfg interfaces.Config, logger interfaces.Logger, publicKeyPEM string, producer *adapters.ProducerAdapter, topic string, opts ...AuthOption) (echo.MiddlewareFunc, error)
 func AuthorizationMiddleware(cfg interfaces.Config, logger interfaces.Logger, roles []string, url string, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc
 func AuditMiddleware(cfg interfaces.Config, logger interfaces.Logger, producer *adapters.ProducerAdapter, topic string) echo.MiddlewareFunc
@@ -95,6 +117,66 @@ opt-in via functional options and one wiring call:
   endpoint + `WWW-Authenticate` challenge.
 
 Full examples: [`examples/auth-opt-in.md`](./examples/auth-opt-in.md).
+
+## Logging
+
+`logctx.New(output)` creates an INFO-level JSON logger. The adapter in the startup
+example connects it to the existing printf-style middleware API. Pass the request
+context to `InfoContext`, `WarnContext`, or `ErrorContext`. The logger adds
+`request_id` from that context, so omit it from `logger.With(...)` and the log
+call itself. When authentication supplies a
+principal, logs also include `cls` (`user` or `app`), `principal_id`, and `tenant_id`
+from `requestctx.GetPrincipal`.
+
+```go
+logger.InfoContext(c.Request().Context(), "item saved", "item_id", id)
+```
+
+`RequestLogger` records the final status, `duration_ms`, and full `uri`, including
+query parameters. Statuses below 500 use INFO; 5xx use ERROR. `Recover` logs the
+panic and stack before returning the error to the outer request logger.
+
+For background work, create one context per run and pass it to logs and database
+operations. It receives `job_name` and a fresh `run_id`:
+
+```go
+runCtx := logctx.WithJobRun(ctx, "expiry_sweep")
+logger.InfoContext(runCtx, "expiry sweep started")
+```
+
+To configure format, level, or attributes, wrap a handler with `NewHandler`:
+
+```go
+handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+logger := slog.New(logctx.NewHandler(handler))
+```
+
+### GORM logging
+
+Use `adapter/gormlog` from this module when opening the database:
+
+```go
+gormlog.HideScanParameters()
+db, err := gorm.Open(dialector, &gorm.Config{Logger: gormlog.New(logger)})
+```
+
+Defaults log errors and queries slower than 200 ms, ignore record-not-found
+errors, and hide bound parameters in ordinary queries. Modify GORM's native
+config to override these defaults.
+
+```go
+sqlConfig := gormlog.DefaultConfig()
+sqlConfig.SlowThreshold = 500 * time.Millisecond
+sqlLogger := gormlog.NewWithConfig(logger, sqlConfig)
+```
+
+`NewWithConfig` uses the complete config, including zero and `false` values.
+The slog handler controls formatting. GORM's `Colorful` setting is unused.
+Call `HideScanParameters` once during application startup, before any GORM queries
+run. It replaces GORM's process-wide recorder filter to omit bound values from
+`Scan` SQL logs. Applications that already own a recorder filter can omit bound
+values there. `ParameterizedQueries` controls ordinary queries.
+Use `db.WithContext(ctx)` so SQL records share request or job correlation fields.
 
 ## 🧪 Optional: Local Replace for Development
 

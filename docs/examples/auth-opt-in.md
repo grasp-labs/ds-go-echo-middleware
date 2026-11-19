@@ -5,6 +5,9 @@
  audience check). However, `Config.Issuer()` is now required so the middleware can
  bind tokens to the correct issuer (and derive JWKS URIs when enabled).
 
+For JSON logging, pass `logctx.Adapter{Logger: logger}` to the existing logger
+argument and register the [global logging chain](../middleware-guide.md#logging).
+
 | Feature | How to enable | Default when omitted |
 | ------- | ------------- | -------------------- |
 | Key-rotation-safe verification (JWKS by `kid`) | `middleware.WithJWKS()` | Static PEM (the `publicKeyPEM` argument) |
