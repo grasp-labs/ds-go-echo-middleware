@@ -48,6 +48,9 @@ func TestGORMTrace(t *testing.T) {
 		{name: "slow success", elapsed: 250 * time.Millisecond, level: "WARN"},
 		{name: "query error", err: errors.New("database unavailable"), level: "ERROR"},
 		{name: "record not found", err: fmt.Errorf("lookup: %w", gorm.ErrRecordNotFound)},
+		{name: "canceled by caller", err: fmt.Errorf("query: %w", context.Canceled)},
+		{name: "slow and canceled", elapsed: 250 * time.Millisecond, err: context.Canceled, level: "WARN"},
+		{name: "deadline exceeded", err: fmt.Errorf("query: %w", context.DeadlineExceeded), level: "ERROR"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {

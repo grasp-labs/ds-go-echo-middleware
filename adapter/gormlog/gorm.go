@@ -3,6 +3,7 @@ package gormlog
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -61,6 +62,16 @@ func (l levelLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
 	config := l.config
 	config.LogLevel = level
 	return NewWithConfig(l.slog, config)
+}
+
+// Trace ignores queries canceled by the caller, for example when the HTTP
+// client disconnects. The query did not fail, so it is not logged as an error.
+// Timeouts and all other SQL errors are still logged as errors.
+func (l levelLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	if errors.Is(err, context.Canceled) {
+		err = nil
+	}
+	l.Interface.Trace(ctx, begin, fc, err)
 }
 
 func (l levelLogger) ParamsFilter(ctx context.Context, sql string, params ...any) (string, []any) {
