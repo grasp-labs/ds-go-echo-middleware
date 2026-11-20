@@ -48,8 +48,8 @@ func TestGORMTrace(t *testing.T) {
 		{name: "slow success", elapsed: 250 * time.Millisecond, level: "WARN"},
 		{name: "query error", err: errors.New("database unavailable"), level: "ERROR"},
 		{name: "record not found", err: fmt.Errorf("lookup: %w", gorm.ErrRecordNotFound)},
-		{name: "canceled by caller", err: fmt.Errorf("query: %w", context.Canceled)},
-		{name: "slow and canceled", elapsed: 250 * time.Millisecond, err: context.Canceled, level: "WARN"},
+		{name: "canceled by caller", err: fmt.Errorf("query: %w", context.Canceled), level: "WARN"},
+		{name: "slow and canceled logs once", elapsed: 250 * time.Millisecond, err: context.Canceled, level: "WARN"},
 		{name: "deadline exceeded", err: fmt.Errorf("query: %w", context.DeadlineExceeded), level: "ERROR"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -94,6 +94,13 @@ func TestConfiguredGORMTrace(t *testing.T) {
 				config.LogLevel = gormlogger.Error
 			},
 			elapsed: time.Second, err: errors.New("database unavailable"), level: "ERROR",
+		},
+		{
+			name: "error level never logs a canceled query as an error",
+			configure: func(config *gormlogger.Config) {
+				config.LogLevel = gormlogger.Error
+			},
+			err: context.Canceled,
 		},
 		{
 			name: "record not found can be logged",
@@ -193,4 +200,21 @@ func TestLogModePreservesParamsFilter(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCanceledQueryKeepsDurationAndError(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var output bytes.Buffer
+		logger := New(logctx.New(&output))
+		logger.Trace(t.Context(), time.Now().Add(-1500*time.Millisecond), func() (string, int64) {
+			return "SELECT count(*) FROM xml", -1
+		}, fmt.Errorf("failed to connect: %w", context.Canceled))
+
+		records := testlog.Read(t, &output)
+		require.Len(t, records, 1)
+		require.Equal(t, "SQL canceled", records[0]["msg"])
+		require.Equal(t, "SELECT count(*) FROM xml", records[0]["sql"])
+		require.EqualValues(t, 1500, records[0]["duration_ms"])
+		require.Equal(t, "failed to connect: context canceled", records[0]["error"])
+	})
 }
