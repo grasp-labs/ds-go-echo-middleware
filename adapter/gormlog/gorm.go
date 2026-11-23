@@ -3,6 +3,7 @@ package gormlog
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -61,6 +62,24 @@ func (l levelLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
 	config := l.config
 	config.LogLevel = level
 	return NewWithConfig(l.slog, config)
+}
+
+// Trace logs queries canceled by the caller at WARN instead of ERROR, for
+// example when the HTTP client disconnects. The query did not fail, but how
+// long it ran shows what users gave up on. Timeouts and all other SQL errors
+// are still logged as errors.
+func (l levelLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	if !errors.Is(err, context.Canceled) {
+		l.Interface.Trace(ctx, begin, fc, err)
+		return
+	}
+	if l.config.LogLevel >= gormlogger.Warn {
+		sql, _ := fc()
+		l.slog.WarnContext(ctx, "SQL canceled",
+			"duration_ms", time.Since(begin).Milliseconds(),
+			"sql", sql,
+			"error", err.Error())
+	}
 }
 
 func (l levelLogger) ParamsFilter(ctx context.Context, sql string, params ...any) (string, []any) {
