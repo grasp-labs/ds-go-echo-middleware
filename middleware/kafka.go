@@ -7,6 +7,7 @@ import (
 	sdkmodels "github.com/grasp-labs/ds-event-stream-go-sdk/models"
 	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/adapters"
 	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/interfaces"
+	"github.com/grasp-labs/ds-go-echo-middleware/v3/middleware/logctx"
 )
 
 const kafkaSendTimeout = 3 * time.Second
@@ -19,6 +20,9 @@ const kafkaSendTimeout = 3 * time.Second
 func sendEventAsync(reqCtx context.Context, producer *adapters.ProducerAdapter, logger interfaces.Logger, topic string, event sdkmodels.EventJson, eventType string) {
 	base := context.WithoutCancel(reqCtx)
 	go func() {
+		// Echo's Recover middleware does not cover this goroutine, so a panic
+		// here crashes the service. Log it first so it shows up in alerts.
+		defer logctx.LogPanic(base)
 		ctx, cancel := context.WithTimeout(base, kafkaSendTimeout)
 		defer cancel()
 		if err := producer.Send(ctx, topic, event); err != nil {
